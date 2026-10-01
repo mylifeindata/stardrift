@@ -1,0 +1,2187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#05060f">
+<title>Stardrift</title>
+<style>
+  :root {
+    --bg: #05060f;
+    --panel: rgba(17, 22, 46, .78);
+    --panel-border: rgba(140, 160, 255, .18);
+    --board: rgba(20, 26, 58, .85);
+    --cell: rgba(255,255,255,.05);
+    --text: #e6e9ff;
+    --muted: #8b93c4;
+    --accent: #7c8cff;
+    --accent2: #4de3ff;
+    --danger: #ff5c7a;
+    --gap: 8px;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%; background: var(--bg); color: var(--text);
+    font-family: -apple-system, "SF Pro Rounded", "Segoe UI", system-ui, sans-serif;
+    -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none; touch-action: none; overflow: hidden;
+  }
+  #stars { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+  .nebula {
+    position: fixed; inset: -20%; z-index: 0; pointer-events: none; filter: blur(60px); opacity: .55;
+    background:
+      radial-gradient(circle at 20% 30%, rgba(124,140,255,.35), transparent 40%),
+      radial-gradient(circle at 80% 70%, rgba(77,227,255,.22), transparent 40%),
+      radial-gradient(circle at 60% 20%, rgba(255,92,200,.18), transparent 35%);
+    animation: drift 40s ease-in-out infinite alternate;
+  }
+  @keyframes drift { from { transform: translate(-2%, -1%) rotate(0deg);} to { transform: translate(2%, 2%) rotate(3deg);} }
+
+  .screen {
+    position: fixed; inset: 0; z-index: 1; display: none; flex-direction: column; align-items: center;
+    padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+    overflow: hidden;
+  }
+  .screen.active { display: flex; }
+  .wrap { width: min(94vw, 520px); display: flex; flex-direction: column; align-items: center; flex: 1; min-height: 0; }
+
+  /* ---------- Home ---------- */
+  #home .wrap { justify-content: center; gap: 14px; }
+  .logo { text-align: center; margin-bottom: 8px; }
+  .logo h1 {
+    font-size: clamp(30px, 8.6vw, 54px); font-weight: 900; letter-spacing: 5px; line-height: 1;
+    background: linear-gradient(90deg, #fff, #7c8cff 45%, #4de3ff); -webkit-background-clip: text; background-clip: text; color: transparent;
+    text-shadow: 0 0 40px rgba(124,140,255,.35);
+  }
+  .logo p { color: var(--muted); font-size: 15px; letter-spacing: 3px; text-transform: uppercase; margin-top: 8px; }
+  .menu { display: flex; flex-direction: column; gap: 12px; width: min(320px, 100%); }
+  .btn {
+    background: linear-gradient(135deg, rgba(124,140,255,.9), rgba(77,227,255,.8)); color: #05060f;
+    border: 0; border-radius: 14px; padding: 16px 20px; font-size: 17px; font-weight: 800; cursor: pointer;
+    box-shadow: 0 8px 30px rgba(124,140,255,.25); letter-spacing: .5px;
+  }
+  .btn.secondary { background: var(--panel); color: var(--text); border: 1px solid var(--panel-border); box-shadow: none; }
+  .btn.small { padding: 9px 14px; font-size: 14px; border-radius: 10px; }
+  .btn.ghost { background: transparent; color: var(--muted); border: 1px solid var(--panel-border); box-shadow: none; }
+  .btn:active { transform: scale(.97); }
+  .btn:disabled { opacity: .4; cursor: default; }
+  .home-stats { color: var(--muted); font-size: 13px; text-align: center; margin-top: 8px; }
+  .home-stats b { color: var(--text); }
+
+  /* ---------- Game ---------- */
+  #game .wrap { gap: 10px; }
+  .topbar { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .title { font-weight: 900; font-size: 16px; letter-spacing: 2px; }
+  .title small { display: block; font-size: 12px; color: var(--muted); font-weight: 600; letter-spacing: 1px; }
+  .pills { display: flex; gap: 6px; }
+  .pill {
+    background: var(--panel); border: 1px solid var(--panel-border); border-radius: 10px; padding: 6px 10px;
+    min-width: 66px; text-align: center; position: relative;
+  }
+  .pill .label { font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); }
+  .pill .value { font-size: 18px; font-weight: 800; }
+  .pill .add {
+    position: absolute; left: 0; right: 0; top: 4px; font-weight: 800; color: var(--accent2);
+    animation: rise .7s ease-out forwards; pointer-events: none;
+  }
+  @keyframes rise { from { opacity: 1; transform: translateY(0);} to { opacity: 0; transform: translateY(-28px);} }
+  .subbar { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--muted); }
+  .objective {
+    position: relative; overflow: hidden; flex: 1; min-width: 0;
+    display: flex; align-items: center; gap: 9px;
+    background: var(--panel); border: 1px solid var(--panel-border); border-radius: 10px;
+    padding: 7px 11px 9px; color: var(--text);
+  }
+  .obj-tile {
+    flex: none; width: 26px; height: 26px; border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.4);
+  }
+  .obj-tile.anch { box-shadow: 0 0 0 2px rgba(77,227,255,.85); }
+  .obj-text { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .obj-text b { color: var(--accent2); font-size: 15px; }
+  @media (max-width: 374px) { .obj-text { font-size: 12px; } .obj-text b { font-size: 13px; } }
+  /* Narrow phones: give the objective its own row so it never truncates to "…" */
+  @media (max-width: 430px) {
+    .subbar { flex-wrap: wrap; }
+    .subbar .objective { width: 100%; flex: none; }
+    .subbar .actions { width: 100%; justify-content: flex-end; }
+  }
+  /* Landscape phones: mission info in a left column, board on the right */
+  @media (orientation: landscape) and (max-height: 540px) {
+    #game .wrap { width: min(96vw, 900px); display: grid;
+      grid-template-columns: minmax(210px, 300px) minmax(0, 1fr);
+      grid-template-rows: auto auto 1fr auto; column-gap: 20px; row-gap: 10px; }
+    #game .topbar { grid-column: 1; grid-row: 1; flex-wrap: wrap; }
+    #game .subbar { grid-column: 1; grid-row: 2; flex-direction: column; align-items: stretch; gap: 8px; }
+    #game .subbar .objective { width: 100%; flex: none; }
+    #game .subbar .actions { justify-content: flex-start; }
+    #game .legend { grid-column: 1; grid-row: 3; align-self: start; justify-content: flex-start; }
+    #game .hint { grid-column: 1; grid-row: 4; }
+    #game .board-wrap { grid-column: 2; grid-row: 1 / 5; }
+  }
+  .obj-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: rgba(255,255,255,.07); }
+  .obj-fill { height: 100%; width: 0; border-radius: 0 2px 2px 0; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width .25s ease; }
+  .objective.near { border-color: rgba(77,227,255,.55); animation: objnear 1.1s ease-in-out infinite; }
+  @keyframes objnear { 0%,100% { box-shadow: 0 0 0 rgba(77,227,255,0);} 50% { box-shadow: 0 0 14px rgba(77,227,255,.4);} }
+  .subbar .actions { display: flex; gap: 6px; }
+
+  .mbanner {
+    position: absolute; inset: 0; z-index: 5; border-radius: 14px;
+    display: none; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+    text-align: center; padding: 16px; pointer-events: none;
+    background: rgba(5,6,15,.88); backdrop-filter: blur(4px);
+  }
+  .mbanner.show { display: flex; animation: mbIn .4s ease both; }
+  .mbanner.hide { animation: mbOut .35s ease both; }
+  @keyframes mbIn { from { opacity: 0; transform: scale(.96);} to { opacity: 1; transform: scale(1);} }
+  @keyframes mbOut { from { opacity: 1;} to { opacity: 0;} }
+  /* Galaxy-clear mini celebration + next-galaxy reveal on the map */
+  #gclear { position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+    flex-direction: column; gap: 6px; z-index: 60; pointer-events: none; text-align: center;
+    background: radial-gradient(ellipse 60% 40% at 50% 50%, rgba(5,6,15,.85), rgba(5,6,15,.35)); }
+  #gclear.show { display: flex; animation: mbIn .45s ease both; }
+  #gclear .gc-kicker { font-size: 12px; letter-spacing: .3em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+  #gclear .gc-name { font-size: clamp(28px, 9vw, 44px); font-weight: 900; letter-spacing: 2px; }
+  #gclear .gc-sub { font-size: 14px; color: var(--muted); }
+  @media (prefers-reduced-motion: no-preference) {
+    .gbanner.reveal, .galaxy.reveal { animation: greveal .8s ease both; }
+    .galaxy.reveal { animation-delay: .15s; }
+    @keyframes greveal { from { opacity: 0; transform: translateY(26px); filter: blur(5px);} to { opacity: 1; transform: none; filter: none;} }
+    .galaxy.reveal .mnode { animation: npop .45s cubic-bezier(.34,1.5,.6,1) both; }
+    @keyframes npop { from { opacity: 0; transform: translate(-50%,-50%) scale(.4);} to { opacity: 1; transform: translate(-50%,-50%) scale(1);} }
+  }
+  .mb-kicker { font-size: 12px; letter-spacing: 3px; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+  .mb-kicker .diff { color: var(--accent2); letter-spacing: 2px; }
+  .mb-name { font-size: clamp(22px, 7vw, 32px); font-weight: 900; letter-spacing: 1px; }
+  .mb-goal { display: flex; align-items: center; gap: 10px; margin-top: 4px; font-size: 16px; font-weight: 700; }
+  .mb-goal b { color: var(--accent2); }
+  .mb-tile {
+    flex: none; width: 44px; height: 44px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.4);
+  }
+  .mb-tile.anch { box-shadow: 0 0 0 2px rgba(77,227,255,.85), 0 0 14px rgba(77,227,255,.4); }
+
+  .board-wrap { flex: 1; min-height: 0; width: 100%; display: flex; align-items: center; justify-content: center; }
+  .board {
+    position: relative; background: var(--board); border-radius: 14px; padding: var(--gap);
+    border: 1px solid var(--panel-border); box-shadow: 0 20px 60px rgba(0,0,0,.5), inset 0 0 40px rgba(124,140,255,.08);
+    touch-action: none;
+  }
+  .grid { position: absolute; inset: var(--gap); display: grid; gap: var(--gap); }
+  .cell { background: var(--cell); border-radius: var(--radius); }
+  .cell.void-cell { background: transparent; }
+  .anchor .tile-inner {
+    box-shadow: 0 0 0 2px rgba(77,227,255,.85), 0 0 18px rgba(77,227,255,.45) !important;
+  }
+  .anchor::after {
+    content: "⚓"; position: absolute; top: 3px; right: 5px; font-size: 11px; opacity: .75; z-index: 1;
+    filter: grayscale(1) brightness(3);
+  }
+  .tiles { position: absolute; inset: var(--gap); }
+  .tile { position: absolute; left: 0; top: 0; transition: transform .11s ease-in-out; will-change: transform; }
+  .tile-inner {
+    width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
+    border-radius: var(--radius); font-weight: 800; color: #fff; position: relative; overflow: hidden;
+    text-shadow: 0 1px 2px rgba(0,0,0,.4);
+  }
+  .tile.new .tile-inner { animation: pop .2s ease-out; }
+  .tile.merged .tile-inner { animation: bump .22s ease-in-out; }
+  /* Win spotlight on the tile that hit the goal; rumble on a failed mission */
+  .tile.goal-hit { z-index: 4; }
+  .tile.goal-hit .tile-inner { animation: goalhit .8s ease-in-out infinite; }
+  @keyframes goalhit {
+    0%, 100% { box-shadow: 0 0 16px rgba(255,209,102,.7), 0 0 40px rgba(255,209,102,.35); transform: scale(1); }
+    50% { box-shadow: 0 0 30px rgba(255,209,102,1), 0 0 70px rgba(255,209,102,.55); transform: scale(1.08); }
+  }
+  #board.rumble { animation: rumble .5s linear; }
+  @keyframes rumble {
+    10% { transform: translate(-5px, 2px) rotate(-.5deg); } 20% { transform: translate(5px, -3px) rotate(.4deg); }
+    30% { transform: translate(-6px, -2px) rotate(.3deg); } 40% { transform: translate(5px, 3px) rotate(-.3deg); }
+    50% { transform: translate(-4px, 2px) rotate(.4deg); } 60% { transform: translate(4px, -2px) rotate(-.4deg); }
+    70% { transform: translate(-3px, 1px) rotate(.2deg); } 80% { transform: translate(2px, -1px); }
+    90% { transform: translate(-1px, 1px); }
+  }
+  @keyframes pop  { 0% { transform: scale(0); opacity: 0;} 100% { transform: scale(1); opacity: 1;} }
+  @keyframes bump { 0% { transform: scale(1);} 50% { transform: scale(1.18);} 100% { transform: scale(1);} }
+
+  .rock .tile-inner {
+    background: radial-gradient(circle at 35% 30%, #5b5f6e, #23252e 70%);
+    box-shadow: inset 0 0 0 2px rgba(0,0,0,.35), inset -6px -6px 12px rgba(0,0,0,.5);
+    border-radius: 42% 58% 55% 45% / 48% 40% 60% 52%;
+  }
+  .rock .tile-inner::after, .rock .tile-inner::before {
+    content: ""; position: absolute; border-radius: 50%; background: rgba(0,0,0,.35);
+  }
+  .rock .tile-inner::before { width: 28%; height: 28%; left: 18%; top: 22%; }
+  .rock .tile-inner::after { width: 18%; height: 18%; right: 20%; bottom: 22%; }
+
+  .nova .tile-inner {
+    background: radial-gradient(circle at 50% 50%, #fff3b0, #ff9f1c 40%, #ff3d00 75%);
+    box-shadow: 0 0 18px rgba(255,120,0,.75); animation: pulse 1s ease-in-out infinite;
+    border-radius: 50%; color: #3a1500; text-shadow: none;
+  }
+  .nova.urgent .tile-inner { animation: pulse .45s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { transform: scale(.94); filter: brightness(1);} 50% { transform: scale(1.02); filter: brightness(1.25);} }
+
+  .comet .tile-inner {
+    background: radial-gradient(circle at 62% 62%, #f2faff 10%, #9fd8ff 32%, rgba(90,140,255,.28) 62%, transparent 78%);
+    border-radius: 50%; box-shadow: 0 0 16px rgba(160,215,255,.55); overflow: visible;
+  }
+  .comet .tile-inner::before {
+    content: ""; position: absolute; left: -14%; top: -14%; width: 68%; height: 68%;
+    background: linear-gradient(315deg, rgba(190,230,255,.7), transparent 72%);
+    border-radius: 50% 12% 50% 50%; filter: blur(2px);
+  }
+
+  .celebrate { position: absolute; inset: 0; pointer-events: none; z-index: 8; }
+  .celebrate.fullscreen { position: fixed; z-index: 80; }   /* win confetti fills the whole screen (NB: not ".screen" — that class is display:none) */
+  .spark { position: absolute; }
+
+  .boom {
+    position: absolute; border-radius: var(--radius); pointer-events: none;
+    background: radial-gradient(circle, rgba(255,240,180,.95), rgba(255,120,0,.6) 50%, transparent 75%);
+    animation: boom .55s ease-out forwards;
+  }
+  @keyframes boom { 0% { transform: scale(.4); opacity: 1;} 100% { transform: scale(1.7); opacity: 0;} }
+
+  .toast {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); pointer-events: none;
+    background: rgba(5,6,15,.85); border: 1px solid var(--panel-border); border-radius: 12px; padding: 10px 16px;
+    font-weight: 800; font-size: 16px; white-space: nowrap; animation: toast 1.3s ease-out forwards; z-index: 5;
+  }
+  @keyframes toast { 0% { opacity: 0; transform: translate(-50%,-30%) scale(.9);} 15% { opacity: 1; transform: translate(-50%,-50%) scale(1);} 75% { opacity: 1;} 100% { opacity: 0; transform: translate(-50%,-80%);} }
+
+  .overlay {
+    position: absolute; inset: 0; border-radius: 14px; display: none; flex-direction: column;
+    align-items: center; justify-content: center; gap: 14px; text-align: center; padding: 20px;
+    background: rgba(5,6,15,.82); animation: fade .35s ease; z-index: 6; backdrop-filter: blur(4px);
+  }
+  .overlay.show { display: flex; }
+  .overlay h2 { font-size: 34px; font-weight: 900; letter-spacing: 1px; }
+  /* Mission-win dressing: big gold stars above a white title, all centered.
+     The card reveals in stages: title, then each star pops in, then the info
+     and buttons fade up. Reduced motion shows everything at once. */
+  #overlayStars { display: none; font-size: 46px; line-height: 1; color: #ffd166;
+    text-shadow: 0 0 22px rgba(255,209,102,.35); }
+  .overlay.win #overlayStars { display: block; }
+  #overlayStars .st { display: inline-block; margin: 0 5px; }
+  #overlayStars .st.off { color: rgba(255,209,102,.28); text-shadow: none; }
+  @media (prefers-reduced-motion: no-preference) {
+    .overlay.win h2 { animation: fadeup .35s ease both; }
+    .overlay.win #overlayStars .st { animation: starpop .5s cubic-bezier(.3,1.6,.5,1) both; }
+    .overlay.win p, .overlay.win .row { animation: fadeup .45s ease both; animation-delay: 1.5s; }
+    @keyframes starpop { from { opacity: 0; transform: scale(0) rotate(-40deg); }
+      60% { opacity: 1; transform: scale(1.3) rotate(8deg); }
+      to { opacity: 1; transform: scale(1) rotate(0); } }
+    @keyframes fadeup { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+  }
+  .overlay p { color: var(--muted); font-size: 14px; }
+  .overlay .row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  @keyframes fade { from { opacity: 0;} to { opacity: 1;} }
+  .hint { font-size: 12px; color: var(--muted); text-align: center; }
+  .legend { display: flex; gap: 8px; justify-content: center; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+  .legend button {
+    background: var(--panel); border: 1px solid var(--panel-border); border-radius: 999px;
+    color: var(--muted); font-size: 12px; font-weight: 600; padding: 5px 11px; cursor: pointer;
+  }
+  .legend button:active { transform: scale(.95); }
+  .legend button::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+  .legend .l-anchor::before { background: transparent; box-shadow: inset 0 0 0 2px rgba(77,227,255,.85); }
+  .legend .l-rock::before { background: #4b4f5c; border-radius: 50%; }
+  .legend .l-nova::before { background: #ff9f1c; border-radius: 50%; box-shadow: 0 0 6px #ff6a00; }
+  .legend .l-comet::before { background: #9fd8ff; border-radius: 50%; box-shadow: 0 0 6px #9fd8ff; }
+
+  /* ---------- Galaxy map ---------- */
+  #map .map-top { width: min(94vw, 520px); display: flex; align-items: center; gap: 10px; padding-bottom: 10px; }
+  #map .map-top .title { flex: 1; }
+  .map-scroll { flex: 1; min-height: 0; width: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y; }
+  .map-inner { position: relative; width: min(94vw, 520px); margin: 0 auto; padding: 4px 0 56px; }
+  .gbanner, .galaxy { --gcol: rgb(var(--gt)); }
+  .gbanner { display: flex; align-items: center; gap: 12px; padding: 26px 6px; }
+  .gbanner .line { flex: 1; height: 1px; background: linear-gradient(90deg, transparent, var(--gcol)); opacity: .5; }
+  .gbanner .line:last-child { background: linear-gradient(90deg, var(--gcol), transparent); }
+  .gb-card { text-align: center; }
+  .gb-stars { color: var(--gcol); font-size: 11px; letter-spacing: 3px; }
+  .gb-name {
+    font-weight: 900; font-size: 18px; letter-spacing: 2px; text-transform: uppercase; margin-top: 2px;
+    background: linear-gradient(90deg, #fff, var(--gcol)); -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .gb-sub { color: var(--muted); font-size: 11px; margin-top: 3px; letter-spacing: 1px; }
+  .galaxy { position: relative; }
+  .galaxy > svg { position: absolute; inset: 0; pointer-events: none; }
+  .gseg { fill: none; stroke: rgba(140,160,255,.30); stroke-width: 5; stroke-linecap: round; stroke-dasharray: .1 13; }
+  .gseg.done { stroke: var(--gcol); stroke-dasharray: none; opacity: .55; }
+  .mnode {
+    position: absolute; transform: translate(-50%, -50%); width: 62px; height: 62px; border-radius: 50%;
+    background: radial-gradient(circle at 38% 32%, rgba(255,255,255,.14), rgba(17,22,46,.92) 62%);
+    border: 2px solid rgba(140,160,255,.4); color: var(--text); cursor: pointer;
+    font: inherit; font-size: 19px; font-weight: 900; box-shadow: 0 6px 18px rgba(0,0,0,.45);
+  }
+  .mnode:active { transform: translate(-50%, -50%) scale(.94); }
+  .mnode .mnum { display: block; line-height: 1; }
+  .mnode .mfeats { display: block; font-size: 10px; line-height: 1; margin-top: 3px; letter-spacing: 1px; }
+  .mnode.done {
+    border-color: rgba(var(--gt), .85);
+    background: radial-gradient(circle at 38% 32%, rgba(var(--gt), .55), rgba(var(--gt), .16) 70%);
+    box-shadow: 0 0 16px rgba(var(--gt), .35);
+  }
+  .mnode.cur {
+    border-color: var(--gcol);
+    background: radial-gradient(circle at 38% 32%, rgba(255,255,255,.3), rgba(var(--gt), .35) 65%);
+    box-shadow: 0 0 22px rgba(var(--gt), .5);
+  }
+  .mnode.cur::before {
+    content: ""; position: absolute; inset: -8px; border-radius: 50%;
+    border: 2px solid var(--gcol); animation: mpulse 1.7s ease-out infinite;
+  }
+  @keyframes mpulse { 0% { transform: scale(.82); opacity: .9; } 100% { transform: scale(1.28); opacity: 0; } }
+  .mnode.locked { opacity: .35; }
+  .mnode .badge {
+    position: absolute; right: -4px; top: -4px; width: 21px; height: 21px; border-radius: 50%;
+    background: var(--gcol); color: #05060f; font-size: 12px; font-weight: 900;
+    display: flex; align-items: center; justify-content: center; box-shadow: 0 0 10px rgba(var(--gt), .6);
+  }
+  .mnode .mname {
+    position: absolute; left: 50%; top: calc(100% + 7px); transform: translateX(-50%);
+    font-size: 10px; font-weight: 700; color: var(--muted); white-space: nowrap; letter-spacing: .5px;
+  }
+  .mnode .mrec {
+    position: absolute; left: 50%; top: calc(100% + 20px); transform: translateX(-50%);
+    font-size: 9px; font-weight: 700; color: var(--gold, #ffd166); white-space: nowrap; letter-spacing: .5px;
+  }
+  .gseg.dotted { stroke-dasharray: 2 7; stroke-linecap: round; opacity: .8; }
+  .mission-sheet { width: min(380px, 100%); }
+  .m-meta { font-size: 14px; color: var(--muted); line-height: 1.7; margin-bottom: 16px; }
+  .m-meta b { color: var(--text); }
+  #mLaunch { width: 100%; }
+
+  /* ---------- Modals ---------- */
+  .modal {
+    position: fixed; inset: 0; z-index: 10; display: none; align-items: center; justify-content: center;
+    background: rgba(0,0,0,.6); padding: 16px; backdrop-filter: blur(3px);
+  }
+  .modal.show { display: flex; }
+  .sheet {
+    background: #0c1027; border: 1px solid var(--panel-border); border-radius: 18px; padding: 20px;
+    width: min(520px, 100%); max-height: 86vh; overflow-y: auto; box-shadow: 0 30px 80px rgba(0,0,0,.6);
+    -webkit-overflow-scrolling: touch; touch-action: pan-y;
+  }
+  .sheet h2 { font-size: 22px; font-weight: 900; margin-bottom: 4px; letter-spacing: 1px; }
+  .sheet .sub { color: var(--muted); font-size: 13px; margin-bottom: 14px; }
+  .sheet-head { display: flex; justify-content: space-between; align-items: flex-start; }
+  .close { background: transparent; border: 0; color: var(--muted); font-size: 22px; cursor: pointer; padding: 4px 8px; }
+  .levels { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+  .lvl {
+    background: var(--panel); border: 1px solid var(--panel-border); border-radius: 12px; padding: 12px; cursor: pointer;
+    text-align: left; color: var(--text); position: relative;
+  }
+  .lvl:disabled { opacity: .4; cursor: default; }
+  .lvl .n { font-size: 11px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+  .lvl .diff { color: var(--accent2); font-size: 9px; letter-spacing: 2px; margin-left: 4px; }
+  .lvl .name { font-weight: 800; font-size: 15px; margin: 2px 0 6px; }
+  .lvl .meta { font-size: 12px; color: var(--muted); }
+  .lvl.completed { background: rgba(74,222,128,.10); border-color: rgba(74,222,128,.4); }
+  .lvl .feats { position: absolute; right: 10px; bottom: 8px; font-size: 13px; letter-spacing: 2px; }
+  .lvl .best { font-size: 12px; color: var(--accent2); margin-top: 4px; }
+  .lb-tabs { display: flex; gap: 6px; margin-bottom: 12px; }
+  .lb-tabs button { flex: 1; }
+  .lb-tabs button.on { background: linear-gradient(135deg, rgba(124,140,255,.9), rgba(77,227,255,.8)); color: #05060f; }
+  .lb-list { list-style: none; }
+  .lb-list li { display: flex; justify-content: space-between; padding: 10px 6px; border-bottom: 1px solid var(--panel-border); font-size: 15px; }
+  .lb-list li span:first-child { color: var(--muted); }
+  .lb-list li b { font-variant-numeric: tabular-nums; }
+  .lb-empty { color: var(--muted); text-align: center; padding: 20px; }
+  .rec { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 4px; border-bottom: 1px solid var(--panel-border); }
+  .rec.slim { padding: 8px 4px; }
+  .rec-title { font-weight: 800; font-size: 16px; margin-bottom: 4px; }
+  .rec-line { font-size: 13px; color: var(--muted); margin-top: 2px; }
+  .rec-line b { color: var(--text); }
+  .rec-line.dim { opacity: .75; font-size: 12px; }
+  .mini { display: grid; gap: 2px; background: var(--board); border: 1px solid var(--panel-border); padding: 4px; border-radius: 8px; width: 112px; flex: none; }
+  .mini-empty { width: 112px; flex: none; }
+  .mc { aspect-ratio: 1; border-radius: 2px; background: rgba(255,255,255,.06); color: #fff; font-size: 8px; font-weight: 700; display: flex; align-items: center; justify-content: center; overflow: hidden; text-shadow: 0 1px 1px rgba(0,0,0,.5); }
+  .mc.void { background: transparent; }
+  .mc.rock-mc { background: #3a3d47; border-radius: 50%; }
+  .mc.comet-mc { background: #9fd8ff; border-radius: 50%; }
+  .mc.anch { box-shadow: inset 0 0 0 1px rgba(77,227,255,.9); }
+  .lab-card { cursor: pointer; }
+  .lab-card .idea { font-style: italic; opacity: .85; margin-top: 3px; }
+  .lab-card .rate-btn { margin-top: 8px; }
+  .rate-row { display: flex; align-items: center; justify-content: space-between; margin: 12px 0; font-size: 14px; color: var(--muted); }
+  .rate-row small { opacity: .7; }
+  .stars { display: flex; }
+  .stars button { background: none; border: 0; font-size: 24px; cursor: pointer; color: #3a4066; padding: 2px 3px; }
+  .stars button.on { color: #ffd166; text-shadow: 0 0 8px rgba(255,209,102,.5); }
+  #rateNote { width: 100%; box-sizing: border-box; background: var(--panel); border: 1px solid var(--panel-border); border-radius: 8px; color: var(--text); padding: 10px; font-family: inherit; font-size: 14px; resize: vertical; -webkit-user-select: text; user-select: text; }
+  .tut-sheet { width: min(420px, 100%); text-align: center; }
+  .tut-sheet h2 { margin-bottom: 14px; }
+  .tut-sheet p { font-size: 15px; line-height: 1.55; color: #c9cdf0; text-align: left; }
+  #tutScene { display: flex; justify-content: center; padding: 10px 0 18px; min-height: 80px; }
+  .tut-board { position: relative; }
+  .tut-cell { position: absolute; background: var(--cell); border-radius: 8px; }
+  .tut-board .tile { position: absolute; left: 0; top: 0; }
+  .tut-flash { position: absolute; border-radius: 8px; background: radial-gradient(circle, rgba(255,240,180,.95), rgba(255,120,0,.55) 55%, transparent 80%); pointer-events: none; animation: boom .5s ease-out forwards; }
+  .help p { font-size: 14px; line-height: 1.5; color: #c9cdf0; }
+  .help b { color: #fff; }
+  .help-sec { border-bottom: 1px solid var(--panel-border); padding: 14px 0; }
+  .help-sec:last-child { border-bottom: 0; padding-bottom: 4px; }
+  .help-sec h3 { font-size: 16px; font-weight: 800; margin-bottom: 4px; }
+  .help-demo { display: flex; justify-content: center; padding: 10px 0 12px; min-height: 76px; }
+</style>
+</head>
+<body>
+<canvas id="stars"></canvas>
+<div class="nebula"></div>
+
+<!-- ============ HOME ============ -->
+<section class="screen active" id="home">
+  <div class="wrap">
+    <div class="logo"><h1>STARDRIFT</h1><p>merge the cosmos</p></div>
+    <div class="menu">
+      <button class="btn" id="btnLevels">Missions</button>
+      <button class="btn secondary" id="btnFree">Free Play</button>
+      <button class="btn secondary" id="btnLab">Level Lab 🧪</button>
+      <button class="btn secondary" id="btnLeaderboard">Leaderboards</button>
+      <button class="btn ghost" id="btnHelp">How to play</button>
+    </div>
+    <div class="home-stats" id="homeStats"></div>
+  </div>
+</section>
+
+<!-- ============ GAME ============ -->
+<section class="screen" id="game">
+  <div class="wrap">
+    <div class="topbar">
+      <div style="display:flex;align-items:center;gap:10px">
+        <button class="btn ghost small" id="btnBack">‹</button>
+        <div class="title" id="gameTitle">STARDRIFT<small id="gameSub"></small></div>
+      </div>
+      <div class="pills">
+        <div class="pill" id="scorePill"><div class="label">Score</div><div class="value" id="score">0</div></div>
+        <div class="pill"><div class="label" id="bestLabel">Best</div><div class="value" id="best">0</div></div>
+      </div>
+    </div>
+    <div class="subbar">
+      <div class="objective" id="objective">
+        <div class="obj-tile" id="objTile"></div>
+        <div class="obj-text" id="objText"></div>
+        <div class="obj-bar"><div class="obj-fill" id="objFill"></div></div>
+      </div>
+      <div class="actions">
+        <button class="btn ghost small" id="btnUndo" hidden>↩ Undo 3</button>
+        <button class="btn ghost small" id="btnRestart">Restart</button>
+      </div>
+    </div>
+    <div class="board-wrap">
+      <div class="board" id="board">
+        <div class="grid" id="grid"></div>
+        <div class="tiles" id="tiles"></div>
+        <div class="mbanner" id="mbanner"></div>
+        <div id="gclear"><div class="gc-kicker">Galaxy cleared</div><div class="gc-name" id="gcName"></div><div class="gc-sub">A new galaxy opens…</div></div>
+        <div class="overlay" id="overlay">
+          <div id="overlayStars"></div>
+          <h2 id="overlayTitle"></h2>
+          <p id="overlayText"></p>
+          <div class="row" id="overlayButtons"></div>
+        </div>
+      </div>
+    </div>
+    <div class="legend" id="legend"></div>
+    <div class="hint">Swipe or use arrow keys / WASD</div>
+  </div>
+</section>
+
+<!-- ============ GALAXY MAP (mission select) ============ -->
+<section class="screen" id="map">
+  <div class="map-top">
+    <button class="btn ghost small" id="btnMapBack">‹</button>
+    <div class="title">MISSIONS<small id="mapProgress"></small></div>
+  </div>
+  <div class="map-scroll" id="mapScroll"></div>
+</section>
+
+<!-- ============ MISSION DETAIL ============ -->
+<div class="modal" id="missionModal">
+  <div class="sheet mission-sheet">
+    <div class="sheet-head"><div><h2 id="mTitle"></h2><div class="sub" id="mSub"></div></div><button class="close" data-close>×</button></div>
+    <div class="m-meta" id="mMeta"></div>
+    <button class="btn" id="mLaunch">Launch mission</button>
+  </div>
+</div>
+
+<!-- ============ FREE FLIGHT PICKER ============ -->
+<div class="modal" id="ffModal">
+  <div class="sheet">
+    <div class="sheet-head"><div><h2>Free Play</h2><div class="sub">Endless mode — pick a board</div></div><button class="close" data-close>×</button></div>
+    <div class="levels" id="ffList"></div>
+  </div>
+</div>
+
+<!-- ============ LEADERBOARD ============ -->
+<div class="modal" id="lbModal">
+  <div class="sheet">
+    <div class="sheet-head"><div><h2>Leaderboards</h2><div class="sub" id="lbSub">Local scores on this device</div></div><button class="close" data-close>×</button></div>
+    <div class="lb-tabs">
+      <button class="btn secondary small on" data-lb="free">Free Play</button>
+      <button class="btn secondary small" data-lb="campaign">Missions</button>
+    </div>
+    <div id="lbBody"></div>
+    <div style="margin-top:14px;text-align:center"><button class="btn small" id="btnGameCenter" style="display:none">Open Game Center</button></div>
+  </div>
+</div>
+
+<!-- ============ LEVEL LAB ============ -->
+<div class="modal" id="labModal">
+  <div class="sheet">
+    <div class="sheet-head"><div><h2>Level Lab 🧪</h2><div class="sub">Experimental levels — play, then rate fun &amp; difficulty and leave notes.</div></div><button class="close" data-close>×</button></div>
+    <div class="levels" id="labList"></div>
+    <div style="margin-top:16px;text-align:center"><button class="btn small" id="btnLabCopy">Copy results</button></div>
+    <div id="labResultsWrap" style="display:none;margin-top:12px">
+      <div class="sub" id="labResultsHint">Couldn't reach the clipboard here — select and copy the text below.</div>
+      <textarea id="labResultsBox" rows="8" readonly style="width:100%;box-sizing:border-box;background:var(--panel);border:1px solid var(--panel-border);border-radius:8px;color:var(--text);padding:10px;font-family:ui-monospace,monospace;font-size:12px;resize:vertical;-webkit-user-select:text;user-select:text"></textarea>
+    </div>
+  </div>
+</div>
+
+<!-- ============ RATE ============ -->
+<div class="modal" id="rateModal">
+  <div class="sheet">
+    <div class="sheet-head"><div><h2 id="rateTitle">Rate</h2><div class="sub">Your playtest verdict</div></div><button class="close" data-close>×</button></div>
+    <div class="rate-row"><span>Fun</span><div class="stars" id="starsFun"></div></div>
+    <div class="rate-row"><span>Difficulty <small>(5 = brutal)</small></span><div class="stars" id="starsDiff"></div></div>
+    <textarea id="rateNote" rows="3" placeholder="Notes — what worked, what didn't…"></textarea>
+    <div style="margin-top:12px;display:flex;justify-content:flex-end"><button class="btn small" id="rateSave">Save</button></div>
+  </div>
+</div>
+
+<!-- ============ TUTORIAL ============ -->
+<div class="modal" id="tutModal">
+  <div class="sheet tut-sheet">
+    <h2 id="tutTitle"></h2>
+    <div id="tutScene"></div>
+    <p id="tutText"></p>
+    <div style="text-align:center;margin-top:16px"><button class="btn" id="tutOk">Got it</button></div>
+  </div>
+</div>
+
+<!-- ============ HELP ============ -->
+<div class="modal" id="helpModal">
+  <div class="sheet help">
+    <div class="sheet-head"><h2>How to play</h2><button class="close" data-close>×</button></div>
+    <div id="helpBody"></div>
+  </div>
+</div>
+
+<script>
+(() => {
+'use strict';
+
+/* =========================================================
+   Config
+   ========================================================= */
+const STORAGE = 'nova-merge';   // legacy internal key — kept so pre-rename progress survives
+// Cross-shaped board: row widths 1,3,5,3,1. Corners are void; the four tips hold
+// anchored tiles that never move but can be merged into.
+const CROSS_SHAPE = {
+  rows: 5, cols: 5,
+  voids: [[0,0],[0,1],[0,3],[0,4],[1,0],[1,4],[3,0],[3,4],[4,0],[4,1],[4,3],[4,4]],
+  anchors: [[0,2],[2,0],[2,4],[4,2]],
+};
+// Mission goals: `target` = reach that tile anywhere; `anchorsAll` = grow every
+// anchor to that value; `anchorsAny` = grow one anchor to that value.
+// Ordered by actual difficulty (free cells vs goal, obstacle pressure), with each
+// mechanic introduced on a gentle level: asteroids → anchors → cross → comets.
+// Progress is keyed by mission NAME (progress v2), so reordering here is safe.
+const LEVELS = [
+  // Order and ratings per Nick's Mission Planner export (Sep 2026). The bare-board
+  // "dwarf ladder" runs Red Dwarf 512 → White Dwarf 1024 → Blue Giant 2048 →
+  // Singularity 4096 → Magnetar 8192.
+  // — Cradle Nebula: basics, no obstacles —
+  { name: 'Launch Pad',     diff: 1, rows: 4, cols: 4, target: 128 },
+  // Protostar: a tiny 3×3 — modest goal, no room to be sloppy
+  { name: 'Protostar',      diff: 1, rows: 3, cols: 3, target: 64 },
+  { name: 'Low Orbit',      diff: 1, rows: 4, cols: 4, target: 256 },
+  // Deep Field: a wide-open 5×5 — plenty of room, a real goal
+  { name: 'Deep Field',     diff: 1, rows: 5, cols: 5, target: 512 },
+  // — Perseus Reach: asteroids first appear, then anchors, then comets —
+  { name: 'Asteroid Belt',  diff: 2, rows: 5, cols: 5, target: 256,  rocks: [[2,2]] },
+  { name: 'Debris Field',   diff: 2, rows: 5, cols: 5, target: 256,  rocks: [[1,1],[3,3]] },
+  { name: 'Gravity Well',   diff: 2, rows: 5, cols: 5, anchors: [[2,2]], anchorsAny: 256 },
+  { name: 'Twin Stars',     diff: 2, rows: 5, cols: 5, anchors: [[1,1],[3,3]], anchorsAll: 128 },
+  // Narrow Pass: hand-tuned stars — the corridor forces detours (Nick: 3★ under 175)
+  { name: 'Narrow Pass',    diff: 2, rows: 6, cols: 4, target: 256,  rocks: [[2,1],[3,2]], stars: [175, 220] },
+  { name: 'Gridlock',       diff: 2, rows: 5, cols: 5, target: 256,  rocks: [[1,1],[1,3],[3,1],[3,3]] },
+  // — Comets arrive: they drift in sporadically (`cometRate`), slide like tiles,
+  //   block merges, and two crashed together annihilate. Comet Cradle is the intro.
+  { name: 'Comet Cradle',   diff: 2, rows: 4, cols: 4, target: 128,  cometRate: .08 },
+  // Red Dwarf: first rung of the bare-board ladder
+  { name: 'Red Dwarf',      diff: 2, rows: 4, cols: 4, target: 512 },
+  // Solar Wind: heavier weather + a center rock (Nick's retune, Sep 2026)
+  { name: 'Solar Wind',     diff: 2, rows: 5, cols: 5, target: 256,  rocks: [[2,2]], cometRate: .10 },
+  // — Orion Expanse: the cross debuts, deeper anchors, odd boards —
+  { name: 'Outpost Alpha',  diff: 3, ...CROSS_SHAPE, anchorsAll: 64 },
+  { name: 'Hyperlane',      diff: 3, rows: 3, cols: 7, target: 256,  rocks: [[1,2],[1,4]] },
+  { name: 'Pulsar',         diff: 3, rows: 4, cols: 4, anchors: [[1,1]], anchorsAny: 256 },
+  { name: 'Iron Core',      diff: 3, rows: 6, cols: 6, anchors: [[2,2],[3,3]], anchorsAll: 256, rocks: [[0,0],[0,5],[5,0],[5,5]] },
+  // Ice Giant: asteroid pillars + comet weather (goal eased 512→256 in playtesting)
+  { name: 'Ice Giant',      diff: 3, rows: 5, cols: 5, target: 256,  rocks: [[0,2],[4,2]], cometRate: .05 },
+  // White Dwarf: second rung of the bare-board ladder
+  { name: 'White Dwarf',    diff: 3, rows: 4, cols: 4, target: 1024 },
+  // Dark Ice: corner asteroids + comet weather, anchor-goaled —
+  // grow the center anchor to 256 (Nick's retunes, Sep 2026: rate .10→.05, goal 512→256)
+  { name: 'Dark Ice',       diff: 3, rows: 5, cols: 5, anchors: [[2,2]], anchorsAny: 256, rocks: [[0,0],[0,4],[4,0],[4,4]], cometRate: .05 },
+  // — Aquila Rift: the mid-game wall —
+  // Comet Storm: the bare-board comet fight (Nick-rated 4★ in the Lab)
+  { name: 'Comet Storm',    diff: 4, rows: 4, cols: 4, target: 512,  cometRate: .06 },
+  { name: 'Plus Ultra',     diff: 4, rows: 5, cols: 5, rocks: [[2,2]], anchors: [[1,2],[2,1],[2,3],[3,2]], anchorsAll: 128 },
+  { name: 'Blockade',       diff: 4, rows: 5, cols: 5, target: 512,  rocks: [[1,2],[2,2],[3,2]] },
+  { name: 'Quasar',         diff: 4, rows: 5, cols: 5, anchors: [[1,1],[1,3],[3,2]], anchorsAll: 256 },
+  // Gauntlet: the five-anchor cross — retuned to 64 each after playtesting
+  { name: 'Gauntlet',       diff: 4, ...CROSS_SHAPE, anchors: [[0,2],[2,0],[2,4],[4,2],[2,2]], anchorsAll: 64 },
+  { name: 'Gridlock II',    diff: 4, rows: 6, cols: 6, target: 512,  rocks: [[1,1],[1,4],[2,2],[3,3],[4,1],[4,4]] },
+  // Big Chill: the big board in rare comet weather (Lab v1 asked for 2048 — impossible; 512 landed)
+  { name: 'Big Chill',      diff: 4, rows: 6, cols: 6, target: 512,  rocks: [[1,1],[1,4],[4,1],[4,4]], cometRate: .03 },
+  // Grand Cross: a 7×7 diamond — the Outpost supersized, in heavy comet
+  // weather (Nick graduated the Lab experiment at rate .10, Sep 2026)
+  { name: 'Grand Cross',    diff: 4, rows: 7, cols: 7, anchorsAll: 256, cometRate: .10,
+    voids: [[0,0],[0,1],[0,2],[0,4],[0,5],[0,6],[1,0],[1,1],[1,5],[1,6],[2,0],[2,6],[4,0],[4,6],[5,0],[5,1],[5,5],[5,6],[6,0],[6,1],[6,2],[6,4],[6,5],[6,6]],
+    anchors: [[0,3],[3,0],[3,6],[6,3]] },
+  // Blue Giant: third rung of the bare-board ladder
+  { name: 'Blue Giant',     diff: 4, rows: 4, cols: 4, target: 2048 },
+  { name: 'Airlock',        diff: 4, rows: 5, cols: 5, target: 512,  rocks: [[0,2],[1,2],[3,2],[4,2]] },
+  // — Deep Void: endgame —
+  // Neutron Star: the criss-cross core, now in comet weather (Nick's retune, Sep 2026)
+  { name: 'Neutron Star',   diff: 5, rows: 6, cols: 6, anchors: [[2,2],[3,3]], anchorsAll: 512, rocks: [[2,3],[3,2]], cometRate: .04 },
+  // Event Horizon: a 3×3 with a single Outpost-style tip anchor jutting out of the
+  // middle row's left edge — feeds only land on it by swiping left (goal 256→512, Nick)
+  { name: 'Event Horizon',  diff: 5, rows: 3, cols: 4, voids: [[0,0],[2,0]], anchors: [[1,0]], anchorsAny: 512 },
+  // Big Bang — graduated from the Lab nova-free: the 2048 endurance run
+  { name: 'Big Bang',       diff: 5, rows: 6, cols: 6, target: 2048, rocks: [[1,1],[1,4],[4,1],[4,4]] },
+  // Tailwind: a comet loose inside the Outpost cross
+  { name: 'Tailwind',       diff: 5, ...CROSS_SHAPE, comets: [[2,2]], anchorsAll: 128 },
+  // Singularity: 4096 on a bare 4×4 — the expert's climb
+  { name: 'Singularity',    diff: 5, rows: 4, cols: 4, target: 4096 },
+  // Supernova — the grand finale, reborn from the Lab with its novas swapped for
+  // drifting comets (crash two together to clear them)
+  { name: 'Supernova',      diff: 5, rows: 6, cols: 6, anchorsAll: 512, anchors: [[2,2],[3,3]], rocks: [[0,0],[0,5],[5,0],[5,5],[2,3],[3,2]], cometRate: .05 },
+  // — The Anomaly: a secret epilogue, fully hidden until the cosmos is conquered.
+  //   All three unlock together and can be played in any order. —
+  // Quark Star: 512 on a 3×3. Technically possible. Nick has done it exactly once.
+  { name: 'Quark Star',     diff: 6, rows: 3, cols: 3, target: 512 },
+  // Magnetar: the classic board pushed past its comfort zone — 8192 on a bare 4×4
+  { name: 'Magnetar',       diff: 6, rows: 4, cols: 4, target: 8192 },
+  // Heat Death: the end of everything — 65536 (2^16) on a bare 5×5. A marathon.
+  { name: 'Heat Death',     diff: 6, rows: 5, cols: 5, target: 65536 },
+];
+// Level Lab — rate levels in-game; results are stored locally and exportable
+// via the Copy results button. (The engine also supports `preset` boards and
+// `noSpawn` puzzle mode if we revisit hand-authored puzzles.)
+// The Sep 2026 comet experiment is resolved: novas retired from the campaign
+// for good, comets are the replacement, all seven comet missions graduated
+// (Slipstream cut). The nova originals stay below as reference pieces until
+// the retirement has soaked for a release — then the mechanic gets deleted.
+const LAB_LEVELS = [
+  // (Grand Cross (comets) experiment resolved: graduated into the campaign
+  // Grand Cross itself at cometRate .10, Sep 2026.)
+  { name: 'Nova Cradle',    diff: 3, rows: 4, cols: 4, target: 128,  nova: .10,
+    idea: 'Retired nova original — reference only. Comet Cradle is its campaign heir.' },
+  { name: 'Solar Flare',    diff: 3, rows: 5, cols: 5, target: 256,  nova: .07,
+    idea: 'Retired nova original — reference only. Solar Wind is its campaign heir.' },
+  { name: 'Red Giant',      diff: 4, rows: 5, cols: 5, target: 512,  rocks: [[0,2],[4,2]], nova: .05,
+    idea: 'Retired nova original — reference only. Ice Giant is its campaign heir.' },
+  { name: 'Wormhole',       diff: 4, rows: 6, cols: 5, target: 512,  rocks: [[1,1],[1,3],[4,1],[4,3]], nova: .05,
+    idea: 'Retired nova original — reference only (its comet remix Slipstream was cut).' },
+  { name: 'Dark Matter',    diff: 4, rows: 5, cols: 5, target: 1024, rocks: [[0,0],[0,4],[4,0],[4,4],[2,2]], nova: .15,
+    idea: 'Retired nova original — reference only. Dark Ice is its campaign heir.' },
+  { name: 'Big Bang (novas)', diff: 5, rows: 6, cols: 6, target: 2048, rocks: [[1,1],[1,4],[4,1],[4,4]], nova: .03,
+    idea: 'Retired nova original — Big Bang lives on nova-free in the campaign.' },
+  { name: 'Supernova (novas)', diff: 5, rows: 6, cols: 6, anchorsAll: 512, anchors: [[2,2],[3,3]], rocks: [[0,0],[0,5],[5,0],[5,5],[2,3],[3,2]], nova: .05,
+    idea: 'Retired nova original — Supernova lives on with comet weather in the campaign.' },
+];
+
+// Free Play variants — each keeps its own high score + final-position record
+const FF = {
+  ff3:     { key: 'ff3',     label: '3 × 3',   name: 'Free Flight', rows: 3, cols: 3, target: Infinity },
+  ff4:     { key: 'ff4',     label: '4 × 4',   name: 'Free Flight', rows: 4, cols: 4, target: Infinity },
+  ff5:     { key: 'ff5',     label: '5 × 5',   name: 'Free Flight', rows: 5, cols: 5, target: Infinity },
+  ffcross: { key: 'ffcross', label: 'Outpost', name: 'Free Flight', target: Infinity, ...CROSS_SHAPE },
+};
+const NOVA_FUSE = 6;
+
+// localStorage can be entirely unavailable (sandboxed previews, data: snapshots,
+// private windows). Fall back to an in-memory map so a live session still keeps
+// its progress and ratings, and surface a warning instead of failing silently.
+let storageOk = true;
+try { localStorage.setItem(STORAGE + ':probe', '1'); localStorage.removeItem(STORAGE + ':probe'); }
+catch { storageOk = false; }
+const memStore = new Map();
+const store = {
+  get(k, d) {
+    try {
+      const v = storageOk ? localStorage.getItem(STORAGE + ':' + k) : memStore.get(STORAGE + ':' + k);
+      return v == null ? d : JSON.parse(v);
+    } catch { return d; }
+  },
+  set(k, v) {
+    try {
+      const s = JSON.stringify(v);
+      if (storageOk) localStorage.setItem(STORAGE + ':' + k, s); else memStore.set(STORAGE + ':' + k, s);
+    } catch {}
+  },
+};
+
+/* =========================================================
+   Leaderboards — Game Center bridge with local fallback
+   ========================================================= */
+const LB_IDS = { ff3: 'stardrift_ff_3x3', ff4: 'stardrift_ff_4x4', ff5: 'stardrift_ff_5x5', ffcross: 'stardrift_outpost', campaign: 'stardrift_missions' };
+const Leaderboard = {
+  plugin() {
+    const C = window.Capacitor;
+    if (!C || !(C.isNativePlatform?.() ?? C.isNative)) return null;
+    return this._p || (this._p = C.Plugins?.GameCenter || (C.registerPlugin ? C.registerPlugin('GameCenter') : null));
+  },
+  native() { return !!this.plugin(); },
+  submit(key, score) {
+    const list = store.get('lb:' + key, []);
+    list.push({ score, at: Date.now() });
+    list.sort((a, b) => b.score - a.score);
+    store.set('lb:' + key, list.slice(0, 10));
+    const p = this.plugin();
+    if (p) p.submitScore({ leaderboardId: LB_IDS[key], score }).catch(() => {});
+  },
+  local(key) { return store.get('lb:' + key, []); },
+  showNative(key) { const p = this.plugin(); if (p) p.showLeaderboard({ leaderboardId: LB_IDS[key] }).catch(() => {}); },
+};
+
+/* =========================================================
+   Pure game engine
+   ========================================================= */
+let nextId = 1;
+const DIRS = { up: [-1, 0], down: [1, 0], left: [0, -1], right: [0, 1] };
+const mk = (kind, extra = {}) => ({ id: nextId++, kind, ...extra });
+const cloneCells = cells => cells.map(row => row.map(o => o && { ...o }));
+
+function newState(level, levelIndex = null) {
+  const cells = Array.from({ length: level.rows }, () => Array(level.cols).fill(null));
+  for (const [r, c] of level.rocks || []) cells[r][c] = mk('rock');
+  for (const [r, c] of level.voids || []) cells[r][c] = mk('void');
+  for (const [r, c] of level.comets || []) cells[r][c] = mk('comet');
+  for (const [r, c] of level.anchors || []) cells[r][c] = mk('tile', { value: 2, anchored: true });
+  const s = { level, levelIndex, rows: level.rows, cols: level.cols, cells, score: 0, moves: 0, won: false, over: false, keepPlaying: false };
+  if (level.preset) {
+    level.preset.forEach((row, r) => row.forEach((v, c) => { if (v) cells[r][c] = mk('tile', { value: v }); }));
+  } else {
+    spawn(s); spawn(s);
+  }
+  return s;
+}
+
+function emptyCells(s) {
+  const out = [];
+  for (let r = 0; r < s.rows; r++) for (let c = 0; c < s.cols; c++) if (!s.cells[r][c]) out.push([r, c]);
+  return out;
+}
+
+function spawn(s) {
+  const empties = emptyCells(s);
+  if (!empties.length) return;
+  const [r, c] = empties[Math.floor(Math.random() * empties.length)];
+  const lv = s.level;
+  let novaRate = lv.nova || 0;
+  if (lv.novaRamp) novaRate = Math.min(.18, s.moves * .0006);
+  const roll = Math.random();
+  const o = (novaRate && roll < novaRate)
+    ? mk('nova', { fuse: NOVA_FUSE, isNew: true })
+    : (lv.cometRate && roll < novaRate + lv.cometRate)
+    ? mk('comet', { isNew: true })
+    : mk('tile', { value: 2, isNew: true });
+  s.cells[r][c] = o;
+}
+
+/** Slides everything; mutates s.cells. Returns { changed, gained, events }. dry=true → no RNG, no mutation guarantees needed. */
+function slide(s, dir, dry = false) {
+  const [dr, dc] = DIRS[dir];
+  const cells = s.cells;
+  const rows = [...Array(s.rows).keys()], cols = [...Array(s.cols).keys()];
+  if (dr === 1) rows.reverse(); if (dc === 1) cols.reverse();
+  for (const row of cells) for (const o of row) if (o) { o.isNew = false; o.merged = false; o.mergedFrom = null; }
+
+  let changed = false, gained = 0; const events = [];
+  const inb = (r, c) => r >= 0 && r < s.rows && c >= 0 && c < s.cols;
+
+  for (const r of rows) for (const c of cols) {
+    let o = cells[r][c];
+    if (!o || o.kind === 'rock' || o.kind === 'nova' || o.kind === 'void' || o.anchored) continue;
+    let nr = r, nc = c;
+    while (true) {
+      const tr = nr + dr, tc = nc + dc;
+      if (!inb(tr, tc)) break;
+      const t = cells[tr][tc];
+      if (!t) { nr = tr; nc = tc; continue; }
+      if (o.kind === 'comet' && t.kind === 'comet') {   // comets annihilate on collision
+        cells[r][c] = null; cells[tr][tc] = null;
+        events.push({ type: 'boom', r: tr, c: tc });
+        changed = true; o = null;
+        break;
+      }
+      if (o.kind === 'tile' && t.kind === 'tile' && t.value === o.value && !t.merged) {
+        cells[r][c] = null; t.value *= 2; t.merged = true; t.mergedFrom = { id: o.id, r, c };
+        gained += t.value; changed = true; o = null;
+      }
+      break;
+    }
+    if (o && (nr !== r || nc !== c)) { cells[r][c] = null; cells[nr][nc] = o; changed = true; }
+  }
+  return { changed, gained, events };
+}
+
+function tickNovas(s, events) {
+  const boom = [];
+  for (let r = 0; r < s.rows; r++) for (let c = 0; c < s.cols; c++) {
+    const o = s.cells[r][c];
+    if (o && o.kind === 'nova' && --o.fuse <= 0) boom.push([r, c]);
+  }
+  for (const [r, c] of boom) {
+    for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+      const rr = r + dr, cc = c + dc;
+      if (rr < 0 || rr >= s.rows || cc < 0 || cc >= s.cols) continue;
+      const o = s.cells[rr][cc];
+      if (o && (o.kind === 'void' || o.kind === 'rock' || o.anchored)) continue;
+      s.cells[rr][cc] = null; events.push({ type: 'boom', r: rr, c: cc });
+    }
+  }
+}
+
+function movesAvailable(s) {
+  for (const dir of Object.keys(DIRS)) {
+    const probe = { ...s, cells: cloneCells(s.cells) };
+    if (slide(probe, dir, true).changed) return true;
+  }
+  return false;
+}
+
+/** Applies a full move. Returns events for rendering, or null if nothing moved. */
+function doMove(s, dir) {
+  if (s.over || (s.won && !s.keepPlaying)) return null;
+  const { changed, gained, events } = slide(s, dir);
+  if (!changed) return null;
+  s.score += gained; s.moves++;
+  tickNovas(s, events);
+  if (!s.level.noSpawn) spawn(s);
+  if (!s.won) {
+    const lv = s.level;
+    if (lv.anchorsAll || lv.anchorsAny) {
+      const vals = [];
+      for (const row of s.cells) for (const o of row) if (o && o.anchored) vals.push(o.value);
+      if (lv.anchorsAll && vals.length && vals.every(v => v >= lv.anchorsAll)) s.won = true;
+      if (lv.anchorsAny && vals.some(v => v >= lv.anchorsAny)) s.won = true;
+    } else if (Number.isFinite(lv.target)) {
+      for (const row of s.cells) for (const o of row) if (o && o.kind === 'tile' && o.value >= lv.target) s.won = true;
+    }
+  }
+  if ((!s.won || s.keepPlaying) && !movesAvailable(s)) s.over = true;
+  return { gained, events };
+}
+
+/* =========================================================
+   Progress
+   ========================================================= */
+// v1 saves keyed `best` by level index in this pre-Lab campaign order; v2 keys
+// by level name so missions can move or be retired without scrambling scores.
+const V1_ORDER = ['Launch Pad','Low Orbit','Asteroid Belt','Twin Stars','Debris Field','Outpost Alpha','Gravity Well','Iron Core','Narrow Pass','Nova Cradle','Solar Flare','Comet Trail','Hyperlane','Grand Cross','Neutron Star','Gridlock','Red Giant','Blockade','Wormhole','Dark Matter','Event Horizon','Gauntlet','Plus Ultra','Pulsar','Quasar','Airlock','Gridlock II','Big Bang','Supernova','Tailwind'];
+const progress = {
+  get() {
+    let p = store.get('progress', { v: 4, unlocked: 1, moves: {}, legacy: {}, stars: {} });
+    if (p.v !== 2 && p.v !== 3 && p.v !== 4) p = this.migrateV1(p);
+    if (p.v === 2 || p.v === 3) p = this.migrateV3(p);
+    // Earned stars are stored per mission (undo use can cap them below the
+    // move-count pace); older v4 saves derive their stars once from moves.
+    if (!p.stars) {
+      p.stars = {};
+      for (const name of Object.keys(p.moves)) { const lv = LEVELS.find(l => l.name === name); p.stars[name] = lv ? starsFor(lv, p.moves[name]) : 1; }
+      for (const name of Object.keys(p.legacy)) p.stars[name] = 1;
+      this.save(p);
+    }
+    return p;
+  },
+  save(p) { store.set('progress', p); },
+  // v4: the move count IS the score. `moves` holds each mission's fewest-moves
+  // clear; wins from before move-tracking land in `legacy` (cleared, 1★, no
+  // move record) until replayed.
+  migrateV3(old) {
+    const p = { v: 4, unlocked: old.unlocked || 1, moves: { ...(old.moves || {}) }, legacy: {} };
+    for (const name of Object.keys(old.best || {}))
+      if (old.best[name] && p.moves[name] == null) p.legacy[name] = 1;
+    this.save(p);
+    return p;
+  },
+  migrateV1(old) {
+    const p = { v: 2, unlocked: 1, best: {} };
+    const lab = labData.get();
+    for (const [k, score] of Object.entries(old.best || {})) {
+      const name = V1_ORDER[+k];
+      if (!name) continue;
+      if (LEVELS.some(lv => lv.name === name)) p.best[name] = score;
+      else if (LAB_LEVELS.some(lv => lv.name === name)) {
+        // Mission moved to the Lab — carry the win and best score over
+        const st = lab.stats[name] || (lab.stats[name] = {});
+        st.best = Math.max(st.best || 0, score);
+        st.wins = Math.max(st.wins || 0, 1); st.plays = Math.max(st.plays || 0, 1);
+      }
+    }
+    // `unlocked` is a count: find the furthest v1-playable level still in the
+    // campaign (or the level that took a retired one's slot) and keep it playable.
+    for (let i = Math.min(old.unlocked || 1, V1_ORDER.length) - 1; i < V1_ORDER.length; i++) {
+      const idx = LEVELS.findIndex(lv => lv.name === V1_ORDER[i]);
+      if (idx >= 0) { p.unlocked = idx + 1; break; }
+    }
+    // The campaign order also changed, so a beaten mission can now sit past that
+    // frontier — every win still unlocks the mission after it.
+    LEVELS.forEach((lv, i) => { if (p.best[lv.name]) p.unlocked = Math.max(p.unlocked, i + 2); });
+    // Re-point an in-flight mission save at its level's new index.
+    const g = store.get('game', null);
+    if (g && g.mode === 'level' && g.levelName) {
+      const ni = LEVELS.findIndex(lv => lv.name === g.levelName);
+      if (ni >= 0 && ni !== g.levelIndex) { g.levelIndex = ni; store.set('game', g); }
+    }
+    labData.save(lab); this.save(p);
+    return p;
+  },
+  cleared(name, p = this.get()) { return p.moves[name] != null || !!p.legacy[name]; },
+  starsOf(name, p = this.get()) {
+    if (p.stars && p.stars[name] != null) return p.stars[name];
+    if (p.moves[name] == null) return p.legacy[name] ? 1 : 0;
+    const lv = LEVELS.find(l => l.name === name);
+    return lv ? starsFor(lv, p.moves[name]) : 1;
+  },
+  totalStars(p = this.get()) { return LEVELS.reduce((a, lv) => a + this.starsOf(lv.name, p), 0); },
+  completed(p = this.get()) { return LEVELS.filter(lv => this.cleared(lv.name, p)).length; },
+};
+
+/* ---------- Mission grading: your move count IS the score (Sep 2026) ----------
+   Lower is better; the best for a mission is its fewest-moves clear. Every win
+   passes and earns 1–3 stars: par is the theoretical minimum number of moves
+   (every spawn is a 2, so total goal value ÷ 2), 3★ at ≤ ~1.25×par and 2★ at
+   ≤ ~1.56×par, rounded to fives — Launch Pad: 3★ under 80, 2★ under 100.
+   Override per level with `stars: [threeAt, twoAt]` when a board needs hand
+   tuning. Free Play keeps classic merge-point scoring. */
+function parMoves(lv) {
+  const goal = lv.anchorsAll ? lv.anchorsAll * (lv.anchors || []).length
+    : lv.anchorsAny ? lv.anchorsAny
+    : lv.target || 128;
+  return Math.max(16, Math.round(goal / 2));
+}
+function starThresholds(lv) {
+  if (lv.stars) return lv.stars;
+  const par = parMoves(lv), r5 = x => Math.max(5, Math.round(x / 5) * 5);
+  return [r5(par * 1.25), r5(par * 1.5625)];
+}
+const starsFor = (lv, moves) => { const [t3, t2] = starThresholds(lv); return moves <= t3 ? 3 : moves <= t2 ? 2 : 1; };
+const starStr = n => '★'.repeat(n) + '☆'.repeat(3 - n);
+
+/* ---------- Galaxies: missions grouped by star rating ---------- */
+const GALAXIES = [
+  { name: 'Cradle Nebula', tint: '124,140,255' },
+  { name: 'Perseus Reach', tint: '77,227,255' },
+  { name: 'Orion Expanse', tint: '74,222,128' },
+  { name: 'Aquila Rift',   tint: '251,146,60' },
+  { name: 'Deep Void',     tint: '232,121,249' },
+  // The secret epilogue: hidden behind '???' until every other mission is beaten
+  { name: 'The Anomaly',   tint: '255,209,102', secret: true },
+];
+const galaxyOf = i => Math.min(Math.max(LEVELS[i].diff || 1, 1), GALAXIES.length) - 1;
+const galaxyLevels = g => LEVELS.map((_, i) => i).filter(i => galaxyOf(i) === g);
+const bestAt = (i, p) => p.moves[LEVELS[i].name] != null || !!p.legacy[LEVELS[i].name];   // "cleared?"
+const galaxyDone = (g, p) => galaxyLevels(g).every(i => bestAt(i, p));
+const galaxyUnlocked = (g, p) => { for (let k = 0; k < g; k++) if (!galaxyDone(k, p)) return false; return true; };
+// Galaxy-gated: any mission in an unlocked galaxy is playable, in any order.
+// `i < p.unlocked` keeps access granted under the old sequential rule.
+// Tester mode (dev gesture: 5 quick taps on the home logo) bypasses all gating
+// so every mission is playable; wins still record to progress as usual.
+let DEV = false; // set from store at boot
+// DEMO mode: auto-on only for the public web demo (GitHub Pages). The first
+// DEMO_GALAXIES galaxies are playable; the rest stay visible-but-locked as a
+// teaser for the full app. Never affects the iOS app or local/dev builds.
+const DEMO = /(^|\.)github\.io$/.test(location.hostname) || /[?&]demo\b/.test(location.search);
+const DEMO_GALAXIES = 2;
+const APP_STORE_URL = '';   // fill in once the app is live, e.g. https://apps.apple.com/app/id6809932337
+const demoLocked = i => DEMO && galaxyOf(i) >= DEMO_GALAXIES;
+const canPlay = (i, p) => demoLocked(i) ? false : (DEV || galaxyUnlocked(galaxyOf(i), p) || i < p.unlocked);
+const currentMission = p => { const i = LEVELS.findIndex((_, k) => canPlay(k, p) && !bestAt(k, p)); return i === -1 ? LEVELS.length - 1 : i; };
+// Secret galaxies are fully invisible — off the map and out of the mission
+// counts — until earned (or in tester mode, where canPlay is always true).
+const galaxyVisible = (g, p) => !GALAXIES[g].secret || galaxyLevels(g).some(i => canPlay(i, p));
+const visibleTotal = p => LEVELS.filter((_, i) => galaxyVisible(galaxyOf(i), p)).length;
+
+/* =========================================================
+   Rendering
+   ========================================================= */
+const $ = id => document.getElementById(id);
+const boardEl = $('board'), gridEl = $('grid'), tilesEl = $('tiles'), overlay = $('overlay');
+let S = null;               // current game state
+let mode = 'free';          // 'free' | 'level'
+let prevPos = new Map();    // id → [r,c] for slide animation
+let cellPx = 60, gapPx = 8;
+
+const TILE_STYLE = {
+  2:    ['linear-gradient(145deg,#6b7280,#3f4553)', '#f3f4f6'],
+  4:    ['linear-gradient(145deg,#94a3b8,#5b6b80)', '#0b1020'],
+  8:    ['linear-gradient(145deg,#38bdf8,#0369a1)', '#fff'],
+  16:   ['linear-gradient(145deg,#2dd4bf,#0f766e)', '#fff'],
+  32:   ['linear-gradient(145deg,#4ade80,#15803d)', '#fff'],
+  64:   ['linear-gradient(145deg,#facc15,#a16207)', '#1a1200'],
+  128:  ['linear-gradient(145deg,#fb923c,#c2410c)', '#fff'],
+  256:  ['linear-gradient(145deg,#f87171,#b91c1c)', '#fff'],
+  512:  ['linear-gradient(145deg,#f472b6,#be185d)', '#fff'],
+  1024: ['linear-gradient(145deg,#c084fc,#7e22ce)', '#fff'],
+  2048: ['radial-gradient(circle at 40% 35%,#fff7cc,#fbbf24 55%,#f59e0b)', '#5a3600'],
+  // The illuminated tier: same radiant treatment as 2048, new hue per step
+  4096:  ['radial-gradient(circle at 40% 35%,#dcfff0,#34d399 55%,#059669)', '#02301c'],
+  8192:  ['radial-gradient(circle at 40% 35%,#dffaff,#22d3ee 55%,#0284c7)', '#062f3f'],
+  16384: ['radial-gradient(circle at 40% 35%,#ffe4f8,#e879f9 55%,#c026d3)', '#43044a'],
+  // 32768+: a new genre — iridescent aurora
+  32768: ['conic-gradient(from 210deg at 50% 45%,#ff5ea8,#ffb84d,#7cffcb,#4de3ff,#b07cff,#ff5ea8)', '#fff'],
+};
+// beyond 32768: the aurora genre, deepened toward the void — each power rotates the sweep
+const tileStyle = v => TILE_STYLE[v] || (v > 32768
+  ? [`conic-gradient(from ${(Math.log2(v) * 67) % 360}deg at 50% 45%,#c81e78,#c77b16,#0fb07c,#0e9cc0,#7a3fe0,#c81e78)`, '#fff']
+  : ['radial-gradient(circle at 40% 35%,#ffffff,#c7d2fe 60%,#818cf8)', '#1e1b4b']);
+const glow = v =>
+  v > 32768  ? '0 0 34px rgba(255,255,255,.5), 0 0 70px rgba(176,124,255,.5)'
+  : v >= 32768 ? '0 0 30px rgba(255,255,255,.65), 0 0 60px rgba(176,124,255,.45)'
+  : v >= 16384 ? '0 0 26px rgba(232,121,249,.7)'
+  : v >= 8192  ? '0 0 26px rgba(34,211,238,.7)'
+  : v >= 4096  ? '0 0 26px rgba(52,211,153,.7)'
+  : v >= 2048  ? '0 0 26px rgba(251,191,36,.7)'
+  : v >= 128   ? `0 0 ${Math.min(22, 6 + Math.log2(v) * 1.5)}px rgba(255,255,255,.18)`
+  : 'none';
+
+function layoutBoard() {
+  if (!S) return;
+  const wrap = boardEl.parentElement;
+  const maxW = Math.min(wrap.clientWidth, 520), maxH = Math.max(200, wrap.clientHeight - 8);
+  gapPx = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--gap'));
+  cellPx = Math.floor(Math.min((maxW - gapPx * (S.cols + 1)) / S.cols, (maxH - gapPx * (S.rows + 1)) / S.rows));
+  cellPx = Math.max(36, cellPx);
+  boardEl.style.width = (cellPx * S.cols + gapPx * (S.cols + 1)) + 'px';
+  boardEl.style.height = (cellPx * S.rows + gapPx * (S.rows + 1)) + 'px';
+  gridEl.style.gridTemplateColumns = `repeat(${S.cols}, 1fr)`;
+  gridEl.style.gridTemplateRows = `repeat(${S.rows}, 1fr)`;
+  gridEl.innerHTML = '';
+  for (let i = 0; i < S.rows * S.cols; i++) {
+    const d = document.createElement('div');
+    const o = S.cells[Math.floor(i / S.cols)][i % S.cols];
+    d.className = 'cell' + (o && o.kind === 'void' ? ' void-cell' : '');
+    gridEl.appendChild(d);
+  }
+}
+
+function fontFor(v) { const n = String(v).length; return (n <= 2 ? .5 : n === 3 ? .4 : n === 4 ? .32 : .26) * cellPx + 'px'; }
+
+function render(result = null) {
+  const step = cellPx + gapPx;
+  const pos = (r, c) => `translate(${c * step}px, ${r * step}px)`;
+  tilesEl.innerHTML = '';
+  const newPos = new Map();
+
+  const draw = (o, r, c, cls, fromRC) => {
+    const el = document.createElement('div');
+    el.className = 'tile ' + o.kind + (o.anchored ? ' anchor' : '') + ' ' + cls;
+    el.style.cssText = `width:${cellPx}px;height:${cellPx}px;`;
+    const inner = document.createElement('div'); inner.className = 'tile-inner';
+    if (o.kind === 'tile') {
+      const [bg, fg] = tileStyle(o.value);
+      inner.style.cssText = `background:${bg};color:${fg};font-size:${fontFor(o.value)};box-shadow:${glow(o.value)}`;
+      inner.textContent = o.value;
+    } else if (o.kind === 'nova') {
+      inner.style.fontSize = fontFor(1); inner.textContent = o.fuse;
+      if (o.fuse <= 2) el.classList.add('urgent');
+    }
+    el.appendChild(inner);
+    const from = fromRC || prevPos.get(o.id) || [r, c];
+    el.dataset.rc = r + ',' + c;
+    el.style.transform = pos(from[0], from[1]);
+    tilesEl.appendChild(el);
+    if (from[0] !== r || from[1] !== c) requestAnimationFrame(() => { el.style.transform = pos(r, c); });
+    return el;
+  };
+
+  for (let r = 0; r < S.rows; r++) for (let c = 0; c < S.cols; c++) {
+    const o = S.cells[r][c];
+    if (!o || o.kind === 'void') continue;
+    if (o.mergedFrom) {                       // absorbed tile slides underneath
+      const ghost = { id: o.mergedFrom.id, kind: 'tile', value: o.value / 2 };
+      draw(ghost, r, c, '', prevPos.get(o.mergedFrom.id) || [o.mergedFrom.r, o.mergedFrom.c]);
+    }
+    draw(o, r, c, o.isNew ? 'new' : o.merged ? 'merged' : '');
+    newPos.set(o.id, [r, c]);
+  }
+  prevPos = newPos;
+
+  if (result) {
+    for (const ev of result.events) {
+      if (ev.type === 'boom') {
+        const b = document.createElement('div'); b.className = 'boom';
+        b.style.cssText = `width:${cellPx}px;height:${cellPx}px;transform:${pos(ev.r, ev.c)}`;
+        b.style.position = 'absolute'; b.style.left = 0; b.style.top = 0;
+        // Combine translate + scale animation: wrap in container
+        const wrap = document.createElement('div');
+        wrap.style.cssText = `position:absolute;left:0;top:0;width:${cellPx}px;height:${cellPx}px;transform:${pos(ev.r, ev.c)};pointer-events:none`;
+        b.style.transform = ''; wrap.appendChild(b); tilesEl.appendChild(wrap);
+        setTimeout(() => wrap.remove(), 600);
+      } else if (ev.type === 'toast') toast(ev.text);
+    }
+    if (result.gained > 0 && mode !== 'level') {   // missions score by moves, not merge points
+      const a = document.createElement('div'); a.className = 'add'; a.textContent = '+' + result.gained;
+      $('scorePill').appendChild(a); setTimeout(() => a.remove(), 700);
+    }
+  }
+  renderHud();
+}
+
+function toast(text) {
+  const t = document.createElement('div'); t.className = 'toast'; t.textContent = text;
+  boardEl.appendChild(t); setTimeout(() => t.remove(), 1300);
+}
+
+/** Mission goal in one shape for both HUD and banner: text, target value, progress 0..1, near = a merge or two from winning. */
+function goalInfo(lv, s) {
+  const goalVal = lv.anchorsAll || lv.anchorsAny || lv.target;
+  const prog = v => Math.min(1, Math.log2(Math.max(2, v)) / Math.log2(goalVal));
+  if (lv.anchorsAll) {
+    const vals = [];
+    for (const row of s.cells) for (const o of row) if (o && o.anchored) vals.push(o.value);
+    const done = vals.filter(v => v >= lv.anchorsAll).length;
+    return { text: `All anchors → <b>${lv.anchorsAll}</b> · <b>${done}/${lv.anchors.length}</b>`,
+      value: goalVal, anch: true,
+      frac: vals.reduce((a, v) => a + prog(v), 0) / (vals.length || 1),
+      near: done < vals.length && vals.every(v => v >= lv.anchorsAll / 2) };
+  }
+  if (lv.anchorsAny) {
+    let mx = 0;
+    for (const row of s.cells) for (const o of row) if (o && o.anchored) mx = Math.max(mx, o.value);
+    return { text: `One anchor → <b>${lv.anchorsAny}</b> · best <b>${mx}</b>`,
+      value: goalVal, anch: true, frac: prog(mx), near: mx >= lv.anchorsAny / 2 && mx < lv.anchorsAny };
+  }
+  let best = 0;
+  for (const row of s.cells) for (const o of row) if (o && o.kind === 'tile' && !o.anchored) best = Math.max(best, o.value);
+  return { text: `Reach <b>${lv.target}</b> · best <b>${best}</b>`,
+    value: goalVal, frac: best ? prog(best) : 0, near: best >= lv.target / 2 && best < lv.target };
+}
+
+const tileFont = (v, px) => (String(v).length <= 2 ? .48 : String(v).length === 3 ? .4 : .32) * px + 'px';
+function styleMiniTile(el, value, anch, px) {
+  const [bg, fg] = tileStyle(value);
+  el.style.background = bg; el.style.color = fg; el.style.fontSize = tileFont(value, px);
+  el.textContent = value;
+  el.classList.toggle('anch', !!anch);
+}
+
+function renderObjective() {
+  const obj = $('objective'), tile = $('objTile'), text = $('objText'), fill = $('objFill');
+  if (mode === 'free') {
+    tile.style.display = 'none'; fill.parentElement.style.display = 'none';
+    obj.classList.remove('near');
+    text.innerHTML = `Endless · <b>${S.moves}</b> moves`;
+    return;
+  }
+  const g = goalInfo(S.level, S);
+  tile.style.display = ''; fill.parentElement.style.display = '';
+  styleMiniTile(tile, g.value, g.anch, 26);
+  text.innerHTML = g.text;
+  fill.style.width = Math.round(g.frac * 100) + '%';
+  obj.classList.toggle('near', !!g.near);
+}
+
+function renderHud() {
+  const scoreLabel = $('scorePill').querySelector('.label');
+  if (mode === 'free') {
+    scoreLabel.textContent = 'Score'; $('score').textContent = S.score;
+    $('bestLabel').textContent = 'Best'; $('best').textContent = bestOf(S.ffKey);
+    $('gameSub').textContent = 'Free Play · ' + FF[S.ffKey].label;
+  } else if (mode === 'lab') {
+    scoreLabel.textContent = 'Score'; $('score').textContent = S.score;
+    $('bestLabel').textContent = 'Best'; $('best').textContent = labData.get().stats[S.level.name]?.best || 0;
+    $('gameSub').textContent = 'Lab · ' + S.level.name;
+  } else {
+    // Missions: your move count is the score — lower is better, stars grade it.
+    const p = progress.get();
+    scoreLabel.textContent = 'Moves'; $('score').textContent = S.moves;
+    const fm = p.moves[S.level.name];
+    $('bestLabel').textContent = 'Best'; $('best').textContent = fm != null ? fm : '—';
+    $('best').parentElement.title = fm != null ? `Fewest moves · ${starStr(progress.starsOf(S.level.name, p))}` : '';
+    $('gameSub').textContent = `Mission ${S.levelIndex + 1} · ${S.level.name}`;
+  }
+  renderObjective();
+  // Tappable chips: tap one to replay that mechanic's demo popup
+  const lv = S.level, chips = [];
+  if (lv.anchors) chips.push(['anchor', 'l-anchor', 'Anchor']);
+  if (lv.rocks) chips.push(['rock', 'l-rock', 'Asteroid']);
+  if (lv.nova || lv.novaRamp) chips.push(['nova', 'l-nova', 'Nova']);
+  if (lv.comets || lv.cometRate) chips.push(['comet', 'l-comet', 'Comet']);
+  if (lv.cometRate) chips.push(['cometCrash', 'l-comet', 'Comet crash']);
+  $('legend').innerHTML = chips.map(([k, cls, label]) => `<button class="${cls}" data-tut="${k}">${label}</button>`).join('');
+  updateUndoBtn();
+}
+
+/* Mission-intro banner: shows the goal big over the board at level start,
+   fades on its own or on the first input. Waits its turn behind tutorial popups. */
+let mbTimer = null, mbPending = false;
+function showMissionBanner() {
+  if (mode === 'free') return;
+  clearTimeout(mbTimer);                                    // a stale banner from the previous level
+  $('mbanner').classList.remove('show', 'hide');            // vanishes instantly, timer and all
+  if ($('tutModal').classList.contains('show')) { mbPending = true; return; }
+  mbPending = false;
+  const lv = S.level, g = goalInfo(lv, S), el = $('mbanner');
+  const diff = '●'.repeat(lv.diff || 1) + '○'.repeat(Math.max(0, 5 - (lv.diff || 1)));
+  const kicker = mode === 'lab' ? 'Level Lab' : `Mission ${S.levelIndex + 1} <span class="diff">${diff}</span>`;
+  const goalText = lv.anchorsAll ? `Grow all <b>${lv.anchors.length}</b> anchors to <b>${lv.anchorsAll}</b>`
+    : lv.anchorsAny ? `Grow one anchor to <b>${lv.anchorsAny}</b>`
+    : `Reach <b>${lv.target}</b>`;
+  el.innerHTML = `<div class="mb-kicker">${kicker}</div><div class="mb-name">${lv.name}</div>
+    <div class="mb-goal"><div class="mb-tile"></div><div>${goalText}</div></div>`;
+  styleMiniTile(el.querySelector('.mb-tile'), g.value, g.anch, 44);
+  el.classList.remove('hide'); el.classList.add('show');
+  clearTimeout(mbTimer);
+  mbTimer = setTimeout(fadeBanner, 2600);
+}
+function fadeBanner() {   // auto-fade — leaves a banner pending behind a tutorial alone
+  const el = $('mbanner');
+  if (!el.classList.contains('show') || el.classList.contains('hide')) return;
+  clearTimeout(mbTimer);
+  el.classList.add('hide');
+  setTimeout(() => el.classList.remove('show', 'hide'), 380);
+}
+function dismissBanner() {   // player input — also cancels a banner waiting behind a tutorial
+  mbPending = false;
+  fadeBanner();
+}
+
+function celebrate() {
+  const layer = document.createElement('div');
+  layer.className = 'celebrate';
+  boardEl.appendChild(layer);
+  const colors = ['#ffd166', '#7c8cff', '#4de3ff', '#f472b6', '#4ade80', '#ffffff'];
+  const W = boardEl.clientWidth, H = boardEl.clientHeight;
+  for (let i = 0; i < 70; i++) {
+    const sp = document.createElement('div');
+    sp.className = 'spark';
+    const size = 4 + Math.random() * 7;
+    sp.style.cssText = `width:${size}px;height:${size}px;background:${colors[i % colors.length]};left:${W / 2}px;top:${H / 2}px;border-radius:${Math.random() < .5 ? '50%' : '2px'};box-shadow:0 0 ${size}px currentColor;color:${colors[i % colors.length]}`;
+    layer.appendChild(sp);
+    const ang = Math.random() * Math.PI * 2, dist = 60 + Math.random() * Math.max(W, H) * .55;
+    const dx = Math.cos(ang) * dist, dy = Math.sin(ang) * dist - 40;
+    const scale = .3 + Math.random() * .7, rot = Math.random() * 720 - 360;
+    sp.animate([
+      { transform: 'translate(-50%,-50%) scale(0)', opacity: 1 },
+      { transform: `translate(calc(-50% + ${dx * .65}px), calc(-50% + ${dy * .65}px)) scale(${scale * 1.15}) rotate(${rot * .65}deg)`, opacity: 1, offset: .6 },
+      { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(${scale * .6}) rotate(${rot}deg)`, opacity: 0 },
+    ], { duration: 900 + Math.random() * 800, easing: 'cubic-bezier(.1,.7,.3,1)', fill: 'forwards' });
+  }
+  setTimeout(() => layer.remove(), 1900);
+}
+
+/* ---------- Win / lose sequences (Sep 2026) ----------
+   The board gets its moment before any result card. Win: the final position
+   freezes, the goal tile lights up, confetti bursts from every edge of the
+   board, and only then does "Mission complete" appear. Lose: a beat of
+   stillness, a rumble through the board, then "Mission failed". Input is
+   frozen for the duration (S._seq); prefers-reduced-motion collapses both
+   sequences to a short pause. */
+const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function highlightGoalTiles() {
+  const lv = S.level; if (!lv) return;
+  const hits = new Set();
+  for (let r = 0; r < S.rows; r++) for (let c = 0; c < S.cols; c++) {
+    const o = S.cells[r][c]; if (!o) continue;
+    if ((lv.anchorsAll && o.anchored && o.value >= lv.anchorsAll) ||
+        (lv.anchorsAny && o.anchored && o.value >= lv.anchorsAny) ||
+        (lv.target && o.kind === 'tile' && !o.anchored && o.value >= lv.target)) hits.add(r + ',' + c);
+  }
+  for (const el of tilesEl.children) if (hits.has(el.dataset.rc)) el.classList.add('goal-hit');
+}
+
+function edgeConfetti() {
+  // Fills the whole screen, not just the board — on phones the board covers
+  // most of the viewport, so board-edge confetti was barely visible.
+  const layer = document.createElement('div');
+  layer.className = 'celebrate fullscreen';
+  document.body.appendChild(layer);
+  const colors = ['#ffd166', '#7c8cff', '#4de3ff', '#f472b6', '#4ade80', '#ffffff'];
+  const W = window.innerWidth, H = window.innerHeight;
+  for (let i = 0; i < 110; i++) {
+    const side = i % 4;                                    // top, right, bottom, left
+    const t = Math.random();
+    const x = side === 1 ? W : side === 3 ? 0 : t * W;
+    const y = side === 0 ? 0 : side === 2 ? H : t * H;
+    const base = side === 0 ? Math.PI / 2 : side === 1 ? Math.PI : side === 2 ? -Math.PI / 2 : 0;
+    const ang = base + (Math.random() - .5) * 1.2;         // burst inward across the screen
+    const dist = 80 + Math.random() * Math.max(W, H) * .45;
+    const dx = Math.cos(ang) * dist, dy = Math.sin(ang) * dist;
+    const sp = document.createElement('div');
+    sp.className = 'spark';
+    const w = 5 + Math.random() * 6, h = 8 + Math.random() * 9;
+    sp.style.cssText = `width:${w}px;height:${h}px;background:${colors[i % colors.length]};left:${x}px;top:${y}px;border-radius:2px;`;
+    layer.appendChild(sp);
+    const rot = Math.random() * 900 - 450;
+    sp.animate([
+      { transform: 'translate(-50%,-50%) scale(.4)', opacity: 1 },
+      { transform: `translate(calc(-50% + ${dx * .7}px), calc(-50% + ${dy * .7}px)) rotate(${rot * .7}deg) scale(1)`, opacity: 1, offset: .65 },
+      { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy + 46}px)) rotate(${rot}deg) scale(.8)`, opacity: 0 },
+    ], { duration: 1000 + Math.random() * 700, easing: 'cubic-bezier(.15,.65,.35,1)', fill: 'forwards', delay: Math.random() * 150 });
+  }
+  setTimeout(() => layer.remove(), 2100);
+}
+
+function rumbleBoard() {
+  boardEl.classList.add('rumble');
+  setTimeout(() => boardEl.classList.remove('rumble'), 520);
+}
+
+function winSequence(showCard) {
+  S._seq = true;
+  highlightGoalTiles();
+  if (reducedMotion()) { setTimeout(showCard, 400); return; }
+  setTimeout(edgeConfetti, 380);
+  setTimeout(showCard, 1150);
+}
+
+function loseSequence(showCard) {
+  S._seq = true;
+  if (reducedMotion()) { setTimeout(showCard, 400); return; }
+  setTimeout(rumbleBoard, 130);
+  setTimeout(showCard, 820);
+}
+
+function showOverlay(title, text, buttons, stars) {
+  $('overlayTitle').textContent = title; $('overlayText').textContent = text;
+  const starBox = $('overlayStars'); starBox.innerHTML = '';
+  if (stars) {
+    const earned = (stars.match(/★/g) || []).length;
+    for (let i = 0; i < 3; i++) {
+      const s = document.createElement('span');
+      s.className = 'st' + (i < earned ? '' : ' off');
+      s.textContent = i < earned ? '★' : '☆';
+      s.style.animationDelay = (.4 + i * .35) + 's';
+      starBox.appendChild(s);
+    }
+  }
+  overlay.classList.remove('win');
+  void overlay.offsetWidth;                       // restart the staged reveal animations
+  overlay.classList.toggle('win', !!stars);
+  const row = $('overlayButtons'); row.innerHTML = '';
+  for (const [label, fn, cls] of buttons) {
+    const b = document.createElement('button'); b.className = 'btn small ' + (cls || ''); b.textContent = label; b.onclick = fn; row.appendChild(b);
+  }
+  overlay.classList.add('show');
+}
+const hideOverlay = () => overlay.classList.remove('show');
+
+/* =========================================================
+   Game flow
+   ========================================================= */
+function bestOf(key) {
+  let b = store.get('best:' + key, null);
+  if (b == null) {   // migrate pre-variant high scores
+    b = key === 'ff5' ? store.get('classicBest', 0) : key === 'ffcross' ? store.get('crossBest', 0) : 0;
+    store.set('best:' + key, b);
+  }
+  return b;
+}
+const recordOf = key => store.get('rec:' + key, null);
+
+/* =========================================================
+   Tutorials — one-time popups with looping mini-demos
+   ========================================================= */
+const TUT_CELL = 56, TUT_GAP = 6;
+let tutTimers = [];
+const tutAt = (ms, fn) => tutTimers.push(setTimeout(fn, ms));
+function stopTut() { tutTimers.forEach(clearTimeout); tutTimers = []; }
+function tutLoop(builder, period) {
+  const run = () => { builder(); tutTimers.push(setTimeout(run, period)); };
+  run();
+}
+function tutScene(cols, rows = 1, host = null) {
+  const container = host || $('tutScene'); container.innerHTML = '';
+  const board = document.createElement('div');
+  board.className = 'tut-board';
+  board.style.width = (cols * TUT_CELL + (cols - 1) * TUT_GAP) + 'px';
+  board.style.height = (rows * TUT_CELL + (rows - 1) * TUT_GAP) + 'px';
+  for (let i = 0; i < cols * rows; i++) {
+    const c = document.createElement('div'); c.className = 'tut-cell';
+    c.style.left = (i % cols) * (TUT_CELL + TUT_GAP) + 'px';
+    c.style.top = Math.floor(i / cols) * (TUT_CELL + TUT_GAP) + 'px';
+    c.style.width = c.style.height = TUT_CELL + 'px';
+    board.appendChild(c);
+  }
+  container.appendChild(board);
+  const pos = (col, row) => `translate(${col * (TUT_CELL + TUT_GAP)}px, ${row * (TUT_CELL + TUT_GAP)}px)`;
+  return {
+    sprite(kind, value, col, row = 0, anchored = false) {
+      const el = document.createElement('div');
+      el.className = 'tile ' + kind + (anchored ? ' anchor' : '');
+      el.style.cssText = `width:${TUT_CELL}px;height:${TUT_CELL}px;transition:transform .22s ease-in-out;transform:${pos(col, row)}`;
+      const inner = document.createElement('div'); inner.className = 'tile-inner';
+      if (kind === 'tile') { const [bg, fg] = tileStyle(value); inner.style.cssText = `background:${bg};color:${fg};font-size:22px`; inner.textContent = value; }
+      else if (kind === 'nova') { inner.style.fontSize = '22px'; inner.textContent = value; }
+      el.appendChild(inner);
+      board.appendChild(el);
+      return el;
+    },
+    move(el, col, row = 0) { el.style.transform = pos(col, row); },
+    setVal(el, v) { const [bg, fg] = tileStyle(v); el.firstChild.style.background = bg; el.firstChild.style.color = fg; el.firstChild.textContent = v; el.firstChild.style.animation = 'bump .25s'; setTimeout(() => el.firstChild.style.animation = '', 300); },
+    flash(col, row = 0, span = 1) {
+      const f = document.createElement('div'); f.className = 'tut-flash';
+      f.style.left = (col * (TUT_CELL + TUT_GAP) - (span - 1) * TUT_CELL * .5) + 'px';
+      f.style.top = (row * (TUT_CELL + TUT_GAP) - (span - 1) * TUT_CELL * .5) + 'px';
+      f.style.width = f.style.height = (TUT_CELL * span) + 'px';
+      board.appendChild(f); setTimeout(() => f.remove(), 550);
+    },
+  };
+}
+const TUT_DEMOS = {
+  intro(host) { tutLoop(() => {
+    const sc = tutScene(4, 1, host);
+    const a = sc.sprite('tile', 2, 0), b = sc.sprite('tile', 2, 2), c = sc.sprite('tile', 4, 3);
+    tutAt(700, () => { sc.move(c, 3); sc.move(b, 2); sc.move(a, 2); });
+    tutAt(980, () => { a.remove(); sc.setVal(b, 4); });
+    tutAt(1700, () => { sc.move(b, 2); sc.move(c, 3); });
+    tutAt(1701, () => { sc.move(b, 2); });
+    tutAt(1900, () => { sc.move(b, 2); sc.move(c, 3); });
+  }, 2600); },
+  rock(host) { tutLoop(() => {
+    const sc = tutScene(4, 1, host);
+    const t = sc.sprite('tile', 4, 0); sc.sprite('rock', 0, 3);
+    tutAt(700, () => sc.move(t, 2));
+  }, 2200); },
+  nova(host) { tutLoop(() => {
+    const sc = tutScene(3, 1, host);
+    const l = sc.sprite('tile', 4, 0), n = sc.sprite('nova', 2, 1), r = sc.sprite('tile', 8, 2);
+    tutAt(700, () => n.firstChild.textContent = '1');
+    tutAt(1400, () => {
+      sc.flash(1, 0, 1.8);
+      l.style.opacity = 0; r.style.opacity = 0; n.style.opacity = 0;
+    });
+  }, 2600); },
+  comet(host) { tutLoop(() => {
+    const sc = tutScene(4, 1, host);
+    const t = sc.sprite('tile', 4, 0), cm = sc.sprite('comet', 0, 1);
+    tutAt(700, () => { sc.move(cm, 3); sc.move(t, 2); });
+  }, 2400); },
+  cometCrash(host) { tutLoop(() => {
+    const sc = tutScene(4, 1, host);
+    const a = sc.sprite('comet', 0, 0), b = sc.sprite('comet', 0, 3);
+    tutAt(700, () => sc.move(a, 2));
+    tutAt(1000, () => { sc.flash(2.5, 0, 1.6); a.style.opacity = 0; b.style.opacity = 0; });
+  }, 2500); },
+  anchor(host) { tutLoop(() => {
+    const sc = tutScene(4, 1, host);
+    const t = sc.sprite('tile', 8, 0), a = sc.sprite('tile', 8, 3, 0, true);
+    tutAt(700, () => sc.move(t, 3));
+    tutAt(960, () => { t.remove(); sc.setVal(a, 16); });
+  }, 2400); },
+  corner(host) { tutLoop(() => {
+    const sc = tutScene(3, 3, host);
+    const big = sc.sprite('tile', 256, 0, 2);
+    big.firstChild.style.boxShadow = '0 0 0 3px rgba(77,227,255,.9), 0 0 18px rgba(77,227,255,.5)';
+    const a = sc.sprite('tile', 64, 2, 2), b = sc.sprite('tile', 32, 1, 0), c = sc.sprite('tile', 32, 1, 1);
+    tutAt(700, () => { sc.move(a, 1, 2); });
+    tutAt(1300, () => { sc.move(b, 1, 1); c.remove(); sc.setVal(c === null ? b : b, 64); });
+  }, 2600); },
+};
+const TUTS = {
+  intro:  { title: 'Welcome to Stardrift', demo: 'intro',
+    text: 'Swipe to slide every tile at once. When two equal numbers collide, they merge into one bigger number. Reach each mission\u2019s goal before the board fills up.' },
+  rock:   { title: 'Asteroids \u2604\uFE0F', demo: 'rock',
+    text: 'Asteroids never move and never merge \u2014 they are a permanent part of this board. Tiles stop dead against them, so plan your lanes around them.' },
+  nova:   { title: 'Novas \uD83D\uDCA5', demo: 'nova',
+    text: 'Novas count down with every swipe. At zero they explode, destroying every tile around them. Asteroids and anchors survive the blast \u2014 keep your big tiles clear!' },
+  comet:  { title: 'Comets \uD83D\uDCAB', demo: 'comet',
+    text: 'Comets drift with every swipe, and nothing can merge with them \u2014 a dead spot that keeps moving. A nova blast can vaporize one.' },
+  cometCrash: { title: 'Comet collisions \ud83d\udcab', demo: 'cometCrash',
+    text: 'In some missions, comets drift in on their own. Steer two comets into each other and both are destroyed \u2014 let them pile up and they\u2019ll clog the board.' },
+  anchor: { title: 'Anchors \u2693', demo: 'anchor',
+    text: 'Anchors never slide, but merge a matching tile into one and it doubles in place. Anchor missions are won by growing them to a target value.' },
+  corner: { title: 'Strategy: own a corner', demo: 'corner',
+    text: 'Struggling? The strongest strategy: park your biggest tile in one corner and never let it leave. Push every merge toward that same corner, and avoid swiping in the one direction that would pull it out.' },
+};
+let tutQueue = [];
+function queueTuts(keys) {
+  for (const k of keys) {
+    if (!store.get('tut:' + k, false)) { store.set('tut:' + k, true); tutQueue.push(k); }
+  }
+  if (tutQueue.length && !$('tutModal').classList.contains('show')) showTut(tutQueue.shift());
+}
+function showTut(key) {
+  const def = TUTS[key];
+  $('tutTitle').textContent = def.title; $('tutText').textContent = def.text;
+  $('tutModal').classList.add('show');
+  TUT_DEMOS[def.demo]();
+}
+function levelTuts(lv) {
+  const keys = [];
+  if (lv.rocks) keys.push('rock');
+  if (lv.nova || lv.novaRamp) keys.push('nova');
+  if (lv.comets || lv.cometRate) keys.push('comet');
+  if (lv.cometRate) keys.push('cometCrash');
+  if (lv.anchors) keys.push('anchor');
+  queueTuts(keys);
+}
+
+const labData = {
+  get() { return store.get('lab', { ratings: {}, stats: {} }); },
+  save(d) { store.set('lab', d); },
+};
+
+function startLab(i) {
+  mode = 'lab'; S = newState(LAB_LEVELS[i], i); S.undos = 3; S.hist = []; prevPos = new Map();
+  showScreen('game'); layoutBoard(); render(); hideOverlay(); saveGame(); levelTuts(S.level);
+  showMissionBanner();
+}
+
+function labEnd(won) {
+  if (S._counted) return; S._counted = true;
+  const d = labData.get();
+  const st = d.stats[S.level.name] || (d.stats[S.level.name] = {});
+  st.plays = (st.plays || 0) + 1;
+  if (won) st.wins = (st.wins || 0) + 1;
+  st.best = Math.max(st.best || 0, S.score);
+  labData.save(d);
+}
+
+function startFree(key) {
+  mode = 'free'; S = newState(FF[key]); S.ffKey = key; prevPos = new Map();
+  showScreen('game'); layoutBoard(); render(); hideOverlay(); saveGame(); levelTuts(S.level);
+}
+function startLevel(i) {
+  mode = 'level'; S = newState(LEVELS[i], i); S.undos = 3; S.hist = []; prevPos = new Map();
+  showScreen('game'); layoutBoard(); render(); hideOverlay(); saveGame(); levelTuts(S.level);
+  showMissionBanner();
+}
+
+function afterMove(result) {
+  render(result);
+  if (mode === 'free') {
+    const key = S.ffKey;
+    if (S.score > bestOf(key)) store.set('best:' + key, S.score);
+    if (S.over) {
+      Leaderboard.submit(key, S.score);
+      let largest = 0;
+      for (const row of S.cells) for (const o of row) if (o && o.kind === 'tile') largest = Math.max(largest, o.value);
+      const rec = recordOf(key);
+      const isRecord = !rec || S.score > rec.score;
+      if (isRecord) store.set('rec:' + key, { score: S.score, tile: largest, at: Date.now(), cells: serializeCells(S.cells) });
+      const card = () => showOverlay(isRecord ? '🏆 New record!' : 'Lost in space', `Score ${S.score} · largest tile ${largest}`,
+        [['Try again', () => startFree(key)], ['Menu', goHome, 'secondary']]);
+      if (isRecord) { S._seq = true; celebrate(); setTimeout(card, 550); }
+      else loseSequence(card);
+    }
+  } else if (mode === 'lab') {
+    if (S.won && !S.keepPlaying && !S._celebrated) {
+      S._celebrated = true;
+      labEnd(true);
+      winSequence(() => showOverlay('🧪 Level complete!', `Score ${S.score} · ${S.moves} moves`, [
+        ['Rate it', () => openRate(S.levelIndex)],
+        ['Try again', () => startLab(S.levelIndex), 'secondary'],
+        ['Lab', () => { goHome(); openLab(); }, 'ghost'],
+      ]));
+    } else if (S.over) {
+      labEnd(false);
+      loseSequence(() => showOverlay('Out of moves', `Score ${S.score} · ${S.moves} moves`, [
+        ['Rate it', () => openRate(S.levelIndex)],
+        ['Retry', () => startLab(S.levelIndex), 'secondary'],
+        ['Lab', () => { goHome(); openLab(); }, 'ghost'],
+      ]));
+    }
+  } else {
+    if (S.won && !S.keepPlaying && !S._celebrated) {
+      S._celebrated = true;
+      const p = progress.get();
+      const nm = S.level.name;
+      // Undo has a price: any use caps this run at 2 stars, all three at 1.
+      const undosUsed = 3 - (S.undos ?? 3);
+      const starCap = undosUsed === 0 ? 3 : undosUsed < 3 ? 2 : 1;
+      const pace = starsFor(S.level, S.moves);
+      const st = Math.min(pace, starCap);
+      const prevMoves = p.moves[nm];
+      const firstClear = !progress.cleared(nm, p);
+      const newBest = prevMoves == null || S.moves < prevMoves;
+      if (newBest) { p.moves[nm] = S.moves; delete p.legacy[nm]; }
+      p.stars[nm] = Math.max(p.stars[nm] || 0, st);
+      p.unlocked = Math.max(p.unlocked, S.levelIndex + 2);
+      progress.save(p);
+      Leaderboard.submit('campaign', progress.totalStars(p));
+      const g = galaxyOf(S.levelIndex);
+      const allDone = progress.completed(p) === LEVELS.length;
+      const clearedGalaxy = firstClear && galaxyDone(g, p);
+      winSequence(() => {
+        if (clearedGalaxy && !allDone) {
+          // Clearing a galaxy's last mission: celebration in place, then pan
+          // to the map where the next galaxy opens up.
+          celebrate();
+          galaxyClearSequence(g);
+        } else {
+          let nexti = allDone && firstClear ? -1 : S.levelIndex + 1;
+          if (nexti !== -1 && !(nexti < LEVELS.length && canPlay(nexti, p))) {
+            const c = currentMission(p);
+            nexti = (!allDone && c !== S.levelIndex && !bestAt(c, p)) ? c : -1;
+          }
+          const btns = [];
+          if (nexti !== -1) btns.push(['Next mission', () => startLevel(nexti)]);
+          btns.push(['Try again', () => startLevel(S.levelIndex), 'secondary']);
+          btns.push(['Missions', openLevels, 'ghost']);
+          const title = allDone && firstClear ? '🌠 Cosmos conquered!' : 'Mission complete!';
+          const sub = `${S.moves} move${S.moves === 1 ? '' : 's'}${newBest && prevMoves != null ? ' · New best!' : ''}`
+            + (st < pace ? ` · Undo used — ${starCap}★ max` : st < 3 ? ` · 3★ under ${starThresholds(S.level)[0]}` : '');
+          if (allDone && firstClear) celebrate();
+          showOverlay(title, sub, btns, starStr(st));
+        }
+      });
+    } else if (S.over) {
+      const failCounts = store.get('fails', {});
+      failCounts[S.level.name] = (failCounts[S.level.name] || 0) + 1;
+      store.set('fails', failCounts);
+      loseSequence(() => showOverlay('Mission failed', `No moves left after ${S.moves} moves`, [['Retry', () => startLevel(S.levelIndex)], ['Missions', openLevels, 'secondary']]));
+      if (failCounts[S.level.name] >= 2) queueTuts(['corner']);
+    }
+  }
+  saveGame();
+}
+
+function move(dir) {
+  if (!S || !document.getElementById('game').classList.contains('active') || overlay.classList.contains('show')) return;
+  if (S._seq && !S.keepPlaying) return;   // board is frozen for a win/lose sequence
+  if (document.querySelector('.modal.show')) return;
+  dismissBanner();
+  // Undo history keeps tile IDs so a rewind can slide tiles back where they came from
+  const snap = { cells: S.cells.map(row => row.map(o => o && { id: o.id, kind: o.kind, value: o.value, fuse: o.fuse, anchored: o.anchored })), score: S.score, moves: S.moves };
+  const result = doMove(S, dir);
+  if (result) {
+    if (S.hist) { S.hist.push(snap); if (S.hist.length > 3) S.hist.shift(); }
+    afterMove(result);
+  }
+}
+
+/* ---------- Undo: an endgame reward ----------
+   Unlocks once the five main galaxies are cleared — the same moment The
+   Anomaly appears, right when its marathons need it — and any time in tester
+   mode. One rewind per game: the last three moves slowly unwind one by one,
+   tiles sliding back into position, move count included. */
+const undoUnlocked = () => DEV || galaxyUnlocked(GALAXIES.length - 1, progress.get());
+function updateUndoBtn() {
+  const b = $('btnUndo');
+  const usable = (mode === 'level' || mode === 'lab') && undoUnlocked();
+  b.hidden = !usable;
+  if (!usable) return;
+  b.textContent = `↩ Undo ${S.undos ?? 3}`;
+  b.title = 'Rewinds your last 3 moves — 3 uses per game. Using Undo caps this run at 2★ (all three: 1★).';
+  b.disabled = !(S.hist && S.hist.length) || !S.undos || !!S._seq || overlay.classList.contains('show');
+}
+function doUndo() {
+  if (!S || !(S.hist && S.hist.length) || !S.undos || S._seq) return;
+  if (overlay.classList.contains('show') || document.querySelector('.modal.show')) return;
+  S.undos--;
+  const steps = S.hist.slice(-3);   // chronological; rewind newest-first
+  S.hist = [];
+  const applySnap = snap => {
+    S.cells = snap.cells.map(row => row.map(o => o && { ...o }));
+    S.score = snap.score; S.moves = snap.moves; S.won = false; S.over = false;
+    render(); renderHud();
+  };
+  if (reducedMotion()) { applySnap(steps[0]); saveGame(); updateUndoBtn(); return; }
+  S._seq = true;                    // freeze input while time runs backward
+  const stepBack = () => {
+    applySnap(steps.pop());
+    if (steps.length) setTimeout(stepBack, 430);
+    else { S._seq = false; saveGame(); updateUndoBtn(); }
+  };
+  setTimeout(stepBack, 60);
+}
+
+/* ---------- Save / resume ---------- */
+const serializeCells = cells => cells.map(row => row.map(o => o && { kind: o.kind, value: o.value, fuse: o.fuse, anchored: o.anchored }));
+function saveGame() {
+  store.set('game', { mode, ffKey: S.ffKey, levelIndex: S.levelIndex, levelName: S.level.name, cells: serializeCells(S.cells), score: S.score, moves: S.moves, won: S.won, keepPlaying: S.keepPlaying, over: S.over, undos: S.undos });
+}
+function migrateSavedMode(g) {
+  if (g && g.mode === 'classic') { g.mode = 'free'; g.ffKey = 'ff5'; }
+  if (g && g.mode === 'cross') { g.mode = 'free'; g.ffKey = 'ffcross'; }
+  return g;
+}
+function resumeGame() {
+  const g = migrateSavedMode(store.get('game', null));
+  if (!g || g.over) return false;
+  const level = g.mode === 'free' ? FF[g.ffKey] : g.mode === 'lab' ? LAB_LEVELS[g.levelIndex] : LEVELS[g.levelIndex];
+  if (!level || g.cells.length !== level.rows) return false;
+  if ((g.mode === 'level' || g.mode === 'lab') && g.levelName && level.name !== g.levelName) return false;
+  mode = g.mode;
+  S = { level, levelIndex: g.levelIndex, ffKey: g.ffKey, rows: level.rows, cols: level.cols, score: g.score, moves: g.moves, won: g.won, keepPlaying: g.keepPlaying, over: false, _celebrated: g.won,
+        undos: Math.min(g.undos ?? 3, 3), hist: [],
+        cells: g.cells.map(row => row.map(o => o && mk(o.kind, { value: o.value, fuse: o.fuse, anchored: o.anchored }))) };
+  if (S.won && !S.keepPlaying) return false;
+  prevPos = new Map();
+  showScreen('game'); layoutBoard(); render(); hideOverlay();
+  return true;
+}
+
+/* =========================================================
+   Screens & UI
+   ========================================================= */
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === id));
+  if (id === 'home') renderHome();
+}
+function goHome() { hideOverlay(); showScreen('home'); }
+function renderHome() {
+  const p = progress.get();
+  $('homeStats').innerHTML = `Missions <b>${progress.completed(p)}/${visibleTotal(p)}</b> · ★ <b>${progress.totalStars(p)}</b> · Free Play bests: 3×3 <b>${bestOf('ff3')}</b> · 4×4 <b>${bestOf('ff4')}</b> · 5×5 <b>${bestOf('ff5')}</b> · ⚓ <b>${bestOf('ffcross')}</b>`
+    + (storageOk ? '' : `<div style="margin-top:10px;color:var(--danger);font-weight:700">⚠ Saving is unavailable here — progress, ratings, and notes will be lost when this page closes.</div>`);
+  const g = migrateSavedMode(store.get('game', null));
+  const resumable = g && !g.over && g.mode === 'free';
+  $('btnFree').innerHTML = 'Free Play' + (resumable ? ' <span style="opacity:.6;font-weight:600">· resume</span>' : '');
+}
+
+function openFF() {
+  const g = migrateSavedMode(store.get('game', null));
+  const list = $('ffList'); list.innerHTML = '';
+  for (const v of Object.values(FF)) {
+    const b = document.createElement('button'); b.className = 'lvl';
+    const canResume = g && !g.over && g.mode === 'free' && g.ffKey === v.key;
+    const rec = recordOf(v.key);
+    b.innerHTML = `<div class="n">${v.voids ? 'cross board' : v.rows + '×' + v.cols}</div><div class="name">${v.label}</div>
+      <div class="meta">Best ${bestOf(v.key)}${rec ? ' · tile ' + rec.tile : ''}</div>
+      ${canResume ? '<div class="best">Tap to resume</div>' : ''}`;
+    b.onclick = () => { closeModals(); if (canResume && resumeGame()) return; startFree(v.key); };
+    list.appendChild(b);
+  }
+  $('ffModal').classList.add('show');
+}
+
+/* ---------- Galaxy map (mission select) ---------- */
+const NODE_SP = 104;    // vertical px between mission nodes on the path
+function renderMap() {
+  const p = progress.get();
+  const scroll = $('mapScroll');
+  scroll.innerHTML = '';
+  const inner = document.createElement('div'); inner.className = 'map-inner';
+  scroll.appendChild(inner);
+  const W = inner.clientWidth || 320;
+  const amp = Math.min(W * .3, 120);
+  const xFor = i => W / 2 + amp * Math.sin(i * 1.05);   // one winding curve across all galaxies
+  const seg = (a, b) => { const dy = (b[1] - a[1]) * .45; return `M ${a[0]} ${a[1]} C ${a[0]} ${a[1] + dy}, ${b[0]} ${b[1] - dy}, ${b[0]} ${b[1]}`; };
+  const cur = currentMission(p);
+  $('mapProgress').textContent = `${progress.completed(p)}/${visibleTotal(p)} complete · ★ ${progress.totalStars(p)}`;
+
+  GALAXIES.forEach((gal, g) => {
+    const ids = galaxyLevels(g); if (!ids.length) return;
+    // A galaxy counts as open on the banner if anything in it is playable —
+    // old sequential grants can reach into a galaxy the gate hasn't opened.
+    const unlocked = ids.some(i => canPlay(i, p));
+    if (gal.secret && !unlocked) return;   // secret galaxies don't exist until earned
+    const done = ids.filter(i => bestAt(i, p)).length;
+
+    const banner = document.createElement('div'); banner.className = 'gbanner';
+    banner.style.setProperty('--gt', gal.tint);
+    banner.innerHTML = `<div class="line"></div><div class="gb-card">
+      <div class="gb-stars">${'★'.repeat(g + 1)}${'☆'.repeat(Math.max(0, 4 - g))}</div>
+      <div class="gb-name">${!unlocked && gal.secret ? '???' : gal.name}</div>
+      <div class="gb-sub">${unlocked ? `${done}/${ids.length} missions` : (DEMO && g >= DEMO_GALAXIES) ? '🔒 In the full game' : gal.secret ? '🔒 Beat every mission to reveal' : `🔒 Beat all ${GALAXIES[g - 1].name} missions to get here`}</div>
+    </div><div class="line"></div>`;
+    inner.appendChild(banner);
+
+    // A secret galaxy is a scattered cloud, not a path: no connecting lines in,
+    // out, or between its nodes — every mission there is playable in any order.
+    const cloud = !!gal.secret;
+    const H = cloud ? ids.length * NODE_SP * .82 + 30 : ids.length * NODE_SP;
+    const band = document.createElement('div'); band.className = 'galaxy';
+    band.style.setProperty('--gt', gal.tint);
+    band.style.height = H + 'px';
+    band.style.background = `radial-gradient(ellipse 90% 70% at 50% 40%, rgba(${gal.tint},.08), transparent)`;
+
+    // Cloud layout: nodes fan out equally spaced from a hub at the top middle,
+    // each on its own dotted spoke — no order implied.
+    const hub = [W / 2, 14];
+    const fanR = Math.min(W * .42, 190);
+    const pts = ids.map((i, k) => {
+      if (!cloud) return [xFor(i), k * NODE_SP + NODE_SP / 2];
+      const a = (ids.length === 1 ? 0 : (k / (ids.length - 1)) * 100 - 50) * Math.PI / 180;
+      return [hub[0] + fanR * Math.sin(a), hub[1] + fanR * Math.cos(a) * .95 + 20];
+    });
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.setAttribute('width', W); svg.setAttribute('height', H);
+    const segs = [];
+    if (g > 0 && !cloud) {
+      const prev = galaxyLevels(g - 1);
+      segs.push([seg([xFor(ids[0] - .5), 0], pts[0]), !!bestAt(prev[prev.length - 1], p)]);
+    }
+    if (!cloud) for (let k = 1; k < pts.length; k++) segs.push([seg(pts[k - 1], pts[k]), !!bestAt(ids[k - 1], p)]);
+    if (g < GALAXIES.length - 1 && galaxyVisible(g + 1, p) && !GALAXIES[g + 1].secret) segs.push([seg(pts[pts.length - 1], [xFor(ids[ids.length - 1] + .5), H]), !!bestAt(ids[ids.length - 1], p)]);
+    for (const [d, isDone] of segs) {
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d', d); path.setAttribute('class', 'gseg' + (isDone ? ' done' : ''));
+      svg.appendChild(path);
+    }
+    if (cloud) for (const [x, y] of pts) {
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d', `M ${hub[0]} ${hub[1]} L ${x} ${y}`);
+      path.setAttribute('class', 'gseg dotted');
+      svg.appendChild(path);
+    }
+    band.appendChild(svg);
+    if (g === revealGalaxy) {
+      banner.classList.add('reveal'); band.classList.add('reveal');
+    }
+
+    ids.forEach((i, k) => {
+      const b = document.createElement('button'); b.className = 'mnode';
+      const completed = !!bestAt(i, p), playable = canPlay(i, p);
+      if (completed) b.classList.add('done'); else if (!playable) b.classList.add('locked');
+      if (i === cur && playable && !completed) { b.classList.add('cur'); b.id = 'curNode'; }
+      b.style.left = pts[k][0] + 'px'; b.style.top = pts[k][1] + 'px';
+      if (g === revealGalaxy) b.style.animationDelay = (.35 + k * .09) + 's';
+      const lv = LEVELS[i];
+      const feats = (lv.rocks ? '☄️' : '') + (lv.nova ? '💥' : '') + (lv.anchors ? '⚓' : '') + (lv.comets || lv.cometRate ? '💫' : '');
+      const mv = p.moves[lv.name];
+      const rec = completed ? (mv != null ? `<span class="mrec">${starStr(progress.starsOf(lv.name, p))} Best: ${mv}</span>` : '') : '';
+      b.innerHTML = (playable ? `<span class="mnum">${cloud ? '✦' : i + 1}</span>${feats ? `<span class="mfeats">${feats}</span>` : ''}` : '🔒') +
+        (completed ? '<span class="badge">✓</span>' : '') +
+        (playable ? `<span class="mname">${lv.name}</span>${rec}` : '');
+      b.onclick = () => openMission(i);
+      band.appendChild(b);
+    });
+    inner.appendChild(band);
+  });
+}
+
+/* Galaxy-clear sequence: a mini celebration over the board, then pan to the
+   map, where the freshly unlocked galaxy animates open. */
+let revealGalaxy = -1;
+function galaxyClearSequence(g) {
+  const el = $('gclear');
+  $('gcName').textContent = GALAXIES[g].name;
+  $('gcName').style.color = `rgb(${GALAXIES[g].tint})`;
+  el.classList.add('show');
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  setTimeout(() => {
+    el.classList.remove('show');
+    revealGalaxy = g + 1;
+    openLevels();
+    revealGalaxy = -1;
+  }, reduced ? 600 : 1800);
+}
+
+function openLevels() {
+  hideOverlay(); showScreen('map'); renderMap();   // show first: layout is measured in px
+  const node = $('curNode'), scroll = $('mapScroll');
+  if (node) scroll.scrollTop = node.getBoundingClientRect().top - scroll.getBoundingClientRect().top + scroll.scrollTop - scroll.clientHeight / 2;
+}
+
+let missionTarget = null;
+function openMission(i) {
+  const p = progress.get(); const lv = LEVELS[i];
+  missionTarget = i;
+  const playable = canPlay(i, p);
+  const gal = GALAXIES[galaxyOf(i)];
+  const hidden = !playable && gal.secret;   // secret missions stay a mystery until earned
+  const feats = [];
+  if (lv.rocks) feats.push('☄️ asteroids'); if (lv.nova) feats.push('💥 novas'); if (lv.anchors) feats.push('⚓ anchors'); if (lv.comets || lv.cometRate) feats.push('💫 comets');
+  const goal = lv.anchorsAll ? `grow all anchors to ${lv.anchorsAll}` : lv.anchorsAny ? `grow an anchor to ${lv.anchorsAny}` : `reach a ${lv.target} tile`;
+  $('mTitle').textContent = playable ? lv.name : '🔒 ' + (hidden ? '???' : lv.name);
+  $('mSub').textContent = `Mission ${i + 1} · ${hidden ? '???' : gal.name} · ${'●'.repeat(lv.diff || 1)}${'○'.repeat(Math.max(0, 5 - (lv.diff || 1)))}`;
+  $('mMeta').innerHTML = hidden
+    ? 'A signal from beyond the void — conquer the cosmos to decode it.'
+    : `Board <b>${lv.voids ? 'cross' : lv.rows + '×' + lv.cols}</b> · Goal <b>${goal}</b>` +
+      (feats.length ? `<br>${feats.join(' · ')}` : '') +
+      (bestAt(i, p) ? `<br>${p.moves[lv.name] != null
+        ? `Best <b>${starStr(progress.starsOf(lv.name, p))}</b> · fewest <b>${p.moves[lv.name]}</b> moves`
+        : 'Cleared — replay to earn stars'} <span style="opacity:.7">· 3★ under ${starThresholds(lv)[0]}</span>` : '');
+  const btn = $('mLaunch');
+  btn.disabled = !playable;
+  btn.textContent = playable ? (bestAt(i, p) ? 'Replay mission' : 'Launch mission')
+    : demoLocked(i) ? '🔒 Play this in the full game'
+    : gal.secret ? 'Beat every mission to reveal' : `Beat all ${GALAXIES[galaxyOf(i) - 1].name} missions first`;
+  $('missionModal').classList.add('show');
+}
+
+let lbTab = 'free';
+function openLeaderboard() {
+  const native = Leaderboard.native();
+  $('lbSub').textContent = native ? 'Your best runs · Game Center connected' : 'Best runs on this device';
+  $('btnGameCenter').style.display = native ? '' : 'none';
+  renderLb(); $('lbModal').classList.add('show');
+}
+function miniBoard(rec) {
+  if (!rec || !rec.cells) return '<div class="mini-empty"></div>';
+  let html = `<div class="mini" style="grid-template-columns:repeat(${rec.cells[0].length},1fr)">`;
+  for (const row of rec.cells) for (const o of row) {
+    if (o && o.kind === 'void') html += '<div class="mc void"></div>';
+    else if (!o) html += '<div class="mc"></div>';
+    else if (o.kind === 'rock') html += '<div class="mc rock-mc"></div>';
+    else if (o.kind === 'comet') html += '<div class="mc comet-mc"></div>';
+    else html += `<div class="mc${o.anchored ? ' anch' : ''}" style="background:${tileStyle(o.value || 0)[0]}">${o.value || ''}</div>`;
+  }
+  return html + '</div>';
+}
+function renderLb() {
+  document.querySelectorAll('[data-lb]').forEach(b => b.classList.toggle('on', b.dataset.lb === lbTab));
+  const body = $('lbBody');
+  if (lbTab === 'free') {
+    body.innerHTML = Object.values(FF).map(v => {
+      const rec = recordOf(v.key), best = bestOf(v.key);
+      const info = rec
+        ? `<div class="rec-line">High score <b>${rec.score}</b></div><div class="rec-line">Largest tile <b>${rec.tile}</b></div><div class="rec-line dim">Final position · ${new Date(rec.at).toLocaleDateString()}</div>`
+        : (best ? `<div class="rec-line">High score <b>${best}</b></div>` : '<div class="rec-line dim">Not played yet</div>');
+      return `<div class="rec"><div><div class="rec-title">${v.label}</div>${info}</div>${miniBoard(rec)}</div>`;
+    }).join('');
+  } else {
+    const p = progress.get();
+    body.innerHTML = `<div class="rec"><div><div class="rec-title">Mission stars</div><div class="rec-line dim">Stars earned across all missions</div></div><div class="rec-title">★ ${progress.totalStars(p)}</div></div>`
+      + LEVELS.map((lv, i) => `<div class="rec slim"><div class="rec-line">${i + 1}. ${lv.name}</div><b>${p.best[lv.name] || '—'}</b></div>`).join('');
+  }
+}
+function closeModals() { stopTut(); document.querySelectorAll('.modal').forEach(m => m.classList.remove('show')); }
+
+function openLab() {
+  const d = labData.get(); const list = $('labList'); list.innerHTML = '';
+  if (!LAB_LEVELS.length) list.innerHTML = '<div class="lb-empty">No experiments right now — new candidates will land here.</div>';
+  LAB_LEVELS.forEach((lv, i) => {
+    const r = d.ratings[lv.name], st = d.stats[lv.name];
+    const card = document.createElement('div');
+    card.className = 'lvl lab-card' + (st && st.wins ? ' completed' : '');
+    const feats = [];
+    if (lv.rocks) feats.push('☄️'); if (lv.nova || lv.novaRamp) feats.push('💥'); if (lv.anchors) feats.push('⚓'); if (lv.comets || lv.cometRate) feats.push('💫'); if (lv.voids) feats.push('◇');
+    const goal = lv.anchorsAll ? `anchors → ${lv.anchorsAll}` : lv.anchorsAny ? `anchor → ${lv.anchorsAny}` : 'target ' + lv.target;
+    card.innerHTML = `<div class="n">Lab ${i + 1}</div><div class="name">${lv.name}</div>
+      <div class="meta">${lv.rows}×${lv.cols} · ${goal}</div>
+      <div class="meta idea">${lv.idea}</div>
+      <div class="meta">${st ? `plays ${st.plays || 0} · wins ${st.wins || 0}` : 'not played'}${r ? ` · fun ${r.fun}★ · diff ${r.diff}★` : ''}</div>
+      <div class="feats">${feats.join(' ')}</div>
+      <button class="btn ghost small rate-btn">Rate</button>`;
+    card.onclick = () => { closeModals(); startLab(i); };
+    card.querySelector('.rate-btn').onclick = e => { e.stopPropagation(); openRate(i); };
+    list.appendChild(card);
+  });
+  $('labModal').classList.add('show');
+}
+
+let rateTarget = null, rateFun = 0, rateDiff = 0;
+function renderStars(elId, val, setter) {
+  const el = $(elId); el.innerHTML = '';
+  for (let i = 1; i <= 5; i++) {
+    const b = document.createElement('button');
+    b.textContent = i <= val ? '★' : '☆'; b.className = i <= val ? 'on' : '';
+    b.onclick = () => setter(i); el.appendChild(b);
+  }
+}
+function drawStars() {
+  renderStars('starsFun', rateFun, v => { rateFun = v; drawStars(); });
+  renderStars('starsDiff', rateDiff, v => { rateDiff = v; drawStars(); });
+}
+function openRate(i) {
+  const inGame = document.getElementById('game').classList.contains('active');
+  closeModals();
+  rateTarget = LAB_LEVELS[i]; rateTarget._fromGame = inGame;
+  const r = labData.get().ratings[rateTarget.name] || {};
+  rateFun = r.fun || 0; rateDiff = r.diff || 0;
+  $('rateNote').value = r.note || '';
+  $('rateTitle').textContent = 'Rate: ' + rateTarget.name;
+  drawStars();
+  $('rateModal').classList.add('show');
+}
+function labResultsText() {
+  const d = labData.get();
+  return 'STARDRIFT LEVEL LAB — PLAYTEST RESULTS\n' + LAB_LEVELS.map((lv, i) => {
+    const r = d.ratings[lv.name], st = d.stats[lv.name];
+    let line = `${i + 1}. ${lv.name} — ` + (r ? `fun ${r.fun}/5, difficulty ${r.diff}/5` : 'not rated');
+    if (st) line += ` (plays ${st.plays || 0}, wins ${st.wins || 0}, best ${st.best || 0})`;
+    if (r && r.note) line += `\n   note: ${r.note}`;
+    return line;
+  }).join('\n');
+}
+
+$('btnLevels').onclick = openLevels;
+$('btnMapBack').onclick = goHome;
+$('mLaunch').onclick = () => { if (missionTarget != null) { closeModals(); startLevel(missionTarget); } };
+$('btnFree').onclick = openFF;
+$('btnLab').onclick = openLab;
+$('rateSave').onclick = () => {
+  if (!rateTarget) return;
+  const d = labData.get();
+  d.ratings[rateTarget.name] = { fun: rateFun, diff: rateDiff, note: $('rateNote').value.trim(), at: Date.now() };
+  labData.save(d);
+  const fromGame = rateTarget._fromGame; rateTarget = null;
+  closeModals();
+  if (!fromGame) openLab();
+};
+$('tutOk').onclick = () => {
+  stopTut(); $('tutModal').classList.remove('show');
+  if (tutQueue.length) setTimeout(() => showTut(tutQueue.shift()), 250);
+  else if (mbPending) setTimeout(showMissionBanner, 200);
+};
+// Copy must never fail silently: clipboard API → legacy execCommand → inline
+// selectable text as the guaranteed fallback (prompt() can be suppressed in
+// embedded webviews, and clipboard access is missing in sandboxed contexts).
+function legacyCopy(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+  document.body.appendChild(ta); ta.focus(); ta.select(); ta.setSelectionRange(0, text.length);
+  let ok = false; try { ok = document.execCommand('copy'); } catch {}
+  ta.remove(); return ok;
+}
+$('btnLabCopy').onclick = async () => {
+  const text = labResultsText();
+  let ok = false;
+  if (navigator.clipboard?.writeText) { try { await navigator.clipboard.writeText(text); ok = true; } catch {} }
+  if (!ok) ok = legacyCopy(text);
+  // Always show the results inline too — proof of what was (or wasn't) captured.
+  $('labResultsBox').value = text;
+  $('labResultsHint').textContent = ok ? 'Copied to clipboard — full text below:' : "Couldn't reach the clipboard here — select and copy the text below.";
+  $('labResultsWrap').style.display = '';
+  $('btnLabCopy').textContent = ok ? 'Copied!' : 'Copy failed — see below';
+  setTimeout(() => { $('btnLabCopy').textContent = 'Copy results'; }, 2000);
+};
+$('btnLeaderboard').onclick = openLeaderboard;
+$('legend').addEventListener('click', e => {
+  const b = e.target.closest('[data-tut]');
+  if (b) { stopTut(); showTut(b.dataset.tut); }
+});
+function openHelp() {
+  stopTut();
+  const body = $('helpBody'); body.innerHTML = '';
+  for (const key of ['intro', 'rock', 'anchor', 'comet', 'cometCrash', 'corner']) {
+    const def = TUTS[key];
+    const sec = document.createElement('div'); sec.className = 'help-sec';
+    const h = document.createElement('h3'); h.textContent = def.title;
+    const demo = document.createElement('div'); demo.className = 'help-demo';
+    const p = document.createElement('p'); p.textContent = def.text;
+    sec.append(h, demo, p); body.appendChild(sec);
+    TUT_DEMOS[def.demo](demo);
+  }
+  const fp = document.createElement('div'); fp.className = 'help-sec';
+  fp.innerHTML = '<h3>Free Play</h3><p><b>Free Play</b> is endless — pick a board (3×3, 4×4, 5×5, or the Outpost cross) and chase a high score on each. Beat your record and the game saves a snapshot of your final position.</p>';
+  body.appendChild(fp);
+  $('helpModal').classList.add('show');
+}
+$('btnHelp').onclick = openHelp;
+$('btnGameCenter').onclick = () => Leaderboard.showNative(lbTab === 'campaign' ? 'campaign' : 'ff5');
+$('btnBack').onclick = goHome;
+$('btnRestart').onclick = () => mode === 'level' ? startLevel(S.levelIndex) : mode === 'lab' ? startLab(S.levelIndex) : startFree(S.ffKey);
+$('btnUndo').onclick = doUndo;
+document.querySelectorAll('[data-close]').forEach(b => b.onclick = closeModals);
+// tutModal: closing is the Got-it button's job; rateModal: a stray tap outside
+// must not discard a half-typed note.
+document.querySelectorAll('.modal').forEach(m => m.addEventListener('click', e => { if (e.target === m && m.id !== 'tutModal' && m.id !== 'rateModal') closeModals(); }));
+document.querySelectorAll('[data-lb]').forEach(b => b.onclick = () => { lbTab = b.dataset.lb; renderLb(); });
+
+/* ---------- Input ---------- */
+const KEYS = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', w: 'up', s: 'down', a: 'left', d: 'right', W: 'up', S: 'down', A: 'left', D: 'right' };
+document.addEventListener('keydown', e => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.target instanceof Element && e.target.closest('input, textarea, [contenteditable]')) return;   // let form fields receive keys
+  if (e.key === 'Escape') { closeModals(); return; }
+  const dir = KEYS[e.key]; if (dir) { e.preventDefault(); move(dir); }
+});
+const SWIPE_MIN = 6;    // px of finger travel before a move fires — small = snappy
+let start = null;
+const trySwipe = (x, y, min) => {
+  if (!start) return;
+  const dx = x - start[0], dy = y - start[1];
+  if (Math.max(Math.abs(dx), Math.abs(dy)) < min) return;
+  start = null;                        // one move per gesture
+  move(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'));
+};
+const gameScreen = $('game');
+gameScreen.addEventListener('touchstart', e => { if (e.touches.length === 1 && !e.target.closest('button')) start = [e.touches[0].clientX, e.touches[0].clientY]; }, { passive: true });
+gameScreen.addEventListener('touchmove', e => {
+  if (!e.target.closest('.sheet')) e.preventDefault();
+  trySwipe(e.touches[0].clientX, e.touches[0].clientY, SWIPE_MIN);   // fire as soon as the finger has moved far enough
+}, { passive: false });
+gameScreen.addEventListener('touchend', e => { trySwipe(e.changedTouches[0].clientX, e.changedTouches[0].clientY, SWIPE_MIN); start = null; });
+boardEl.addEventListener('mousedown', e => { start = [e.clientX, e.clientY]; });
+document.addEventListener('mouseup', e => { trySwipe(e.clientX, e.clientY, 30); start = null; });
+window.addEventListener('resize', () => {
+  if (S) { layoutBoard(); render(); }
+  if ($('map').classList.contains('active')) {               // node positions are computed in px
+    const sc = $('mapScroll'), keep = sc.scrollTop;
+    renderMap(); sc.scrollTop = keep;
+  }
+});
+
+/* ---------- Starfield ---------- */
+(function stars() {
+  const cv = $('stars'), ctx = cv.getContext('2d');
+  let W, H, pts = [];
+  const reset = () => {
+    W = cv.width = innerWidth * devicePixelRatio; H = cv.height = innerHeight * devicePixelRatio;
+    pts = Array.from({ length: Math.floor((innerWidth * innerHeight) / 6000) }, () => ({
+      x: Math.random() * W, y: Math.random() * H, r: (Math.random() * 1.2 + .3) * devicePixelRatio, p: Math.random() * Math.PI * 2, s: .5 + Math.random() * 1.5, v: Math.random() * .08 + .02,
+    }));
+  };
+  reset(); addEventListener('resize', reset);
+  let last = 0;
+  (function frame(t) {
+    if (t - last > 33) {
+      last = t; ctx.clearRect(0, 0, W, H);
+      for (const p of pts) {
+        p.y += p.v * devicePixelRatio; if (p.y > H) p.y = 0;
+        const a = .35 + .65 * (0.5 + 0.5 * Math.sin(t / 1000 * p.s + p.p));
+        ctx.fillStyle = `rgba(230,235,255,${a})`; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 7); ctx.fill();
+      }
+    }
+    requestAnimationFrame(frame);
+  })(0);
+})();
+
+/* ---------- Boot ---------- */
+renderHome();
+queueTuts(['intro']);
+// Tester mode is a development tool — the dev gesture (5 quick taps on the logo)
+// toggles it. On: every mission is unlocked and the Level Lab shows in the native
+// app. Off: normal gating (progress made while testing is kept).
+const applyDevMode = () => {
+  if (window.Capacitor?.isNativePlatform?.()) $('btnLab').style.display = DEV ? '' : 'none';
+  let badge = document.getElementById('devBadge');
+  if (DEV && !badge) {
+    badge = document.createElement('p'); badge.id = 'devBadge'; badge.textContent = '🔧 tester mode — all missions unlocked';
+    badge.style.cssText = 'margin:6px 0 0;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#7dd3fc;opacity:.8;';
+    document.querySelector('#home .logo').appendChild(badge);
+  } else if (!DEV && badge) badge.remove();
+};
+if (DEMO) {
+  // Public web demo: hide the dev-only Lab, skip the tester gesture entirely,
+  // and show a persistent "full game" call-to-action on the home screen.
+  $('btnLab').style.display = 'none';
+  const note = document.createElement('p');
+  note.textContent = APP_STORE_URL ? '✦ Demo — galaxies 1 & 2. Get the full game ›' : '✦ Demo — galaxies 1 & 2. Full game coming soon to the App Store';
+  note.style.cssText = 'margin:10px 0 0;font-size:12px;letter-spacing:.06em;color:#7dd3fc;' + (APP_STORE_URL ? 'cursor:pointer;text-decoration:underline;' : 'opacity:.85;');
+  if (APP_STORE_URL) note.onclick = () => window.open(APP_STORE_URL, '_blank');
+  document.querySelector('#home .logo').appendChild(note);
+} else {
+  DEV = store.get('devlab', false);
+  applyDevMode();
+  renderHome();   // re-render: mission totals depend on DEV (secret galaxies)
+  let logoTaps = 0, logoTapTimer = null;
+  document.querySelector('#home .logo').addEventListener('click', () => {
+    clearTimeout(logoTapTimer); logoTapTimer = setTimeout(() => { logoTaps = 0; }, 1500);
+    if (++logoTaps >= 5) {
+      logoTaps = 0;
+      DEV = !store.get('devlab', false);
+      store.set('devlab', DEV);
+      applyDevMode();
+      renderHome();
+    }
+  });
+}
+// Expose a tiny debug hook (used for automated testing)
+window.__nova = { get state() { return S; }, move, startFree, startLevel, startLab, LEVELS, LAB_LEVELS, FF };
+})();
+</script>
+</body>
+</html>
